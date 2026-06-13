@@ -1,0 +1,30 @@
+{
+    "name": "jakubboucek/php-sync",
+    "description": "Obousměrná rsync-podobná synchronizace souborů přes HTTP agenta pro legacy hostingy (jen FTP).",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Jakub Bouček",
+            "email": "pan@jakubboucek.cz"
+        }
+    ],
+    "require": {
+        "php": ">=8.4",
+        "ext-curl": "*",
+        "ext-sodium": "*",
+        "ext-zlib": "*",
+        "symfony/console": "^7.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "PhpSync\\": "src/"
+        }
+    },
+    "bin": [
+        "bin/php-sync"
+    ],
+    "config": {
+        "sort-packages": true
+    }
+}

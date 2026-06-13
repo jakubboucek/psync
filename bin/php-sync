@@ -1,0 +1,35 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+namespace PhpSync;
+
+use Symfony\Component\Console\Application;
+
+(static function (): void {
+    // Najdi autoloader – ať balíček funguje jako lokální, tak jako `composer global`.
+    $candidates = [
+        __DIR__ . '/../vendor/autoload.php',          // lokální vývoj
+        __DIR__ . '/../../../autoload.php',            // nainstalovaný jako závislost
+    ];
+    foreach ($candidates as $file) {
+        if (is_file($file)) {
+            require $file;
+            return;
+        }
+    }
+    fwrite(STDERR, "Nenalezen Composer autoloader. Spusť `composer install`.\n");
+    exit(1);
+})();
+
+$app = new Application('php-sync', '0.1.0-dev');
+
+$app->addCommands([
+    new Command\InstallCommand(),
+    new Command\CompareCommand(),
+    new Command\UploadCommand(),
+    new Command\DownloadCommand(),
+]);
+
+$app->run();

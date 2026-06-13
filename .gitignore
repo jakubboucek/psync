@@ -1,0 +1,17 @@
+/vendor/
+/composer.lock
+
+# Test prostředí – generovaný obsah, nikdy necommitovat
+/tests/local/
+/tests/remote/
+/tests/*.config.php
+
+# Vygenerovaný agent a config s privátním klíčem
+agent.php
+*.private.php
+php-sync.php
+
+# IDE / OS
+/.idea/
+/.claude/
+.DS_Store
