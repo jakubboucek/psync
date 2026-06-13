@@ -7,6 +7,7 @@ namespace JakubBoucek\Psync\Command;
 use JakubBoucek\Psync\Console\Reporter;
 use JakubBoucek\Psync\Protocol\Protocol;
 use JakubBoucek\Psync\Protocol\Wire;
+use JakubBoucek\Psync\Sync\TransferItem;
 use JakubBoucek\Psync\Sync\Uploader;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -40,27 +41,32 @@ final class UploadCommand extends AbstractSyncCommand
 
         $comparison = $this->buildComparator($config, $input, $http, $reporter)->compare($this->scope($input));
 
-        // local → remote: missing on the server + differing in content
-        $files = $comparison->localOnly;
-        foreach ($comparison->modified as $rel => $pair) {
-            $files[$rel] = $pair['local'];
+        // local → remote: missing on the server (source = target = local name) +
+        // differing in content (written under the existing remote name to avoid
+        // normalization duplicates).
+        $items = [];
+        foreach ($comparison->localOnly as $e) {
+            $items[] = new TransferItem($e->path, $e->path, $e->size);
+        }
+        foreach ($comparison->modified as $pair) {
+            $items[] = new TransferItem($pair['local']->path, $pair['remote']->path, $pair['local']->size);
         }
 
         $delete = (bool) $input->getOption('delete');
         $protect = $this->buildProtect($config);
-        $toDelete = [];
+        $toDelete = []; // remote original paths to delete
         $protectedCount = 0;
         if ($delete) {
             foreach ($comparison->remoteOnly as $rel => $e) {
                 if ($protect->matches($rel)) {
                     $protectedCount++;
                 } else {
-                    $toDelete[] = $rel;
+                    $toDelete[] = $e->path;
                 }
             }
         }
 
-        if ($files === [] && $toDelete === []) {
+        if ($items === [] && $toDelete === []) {
             $io->success('Nothing to upload – the server is in sync.');
             if ($protectedCount > 0) {
                 $io->note("$protectedCount files are extra but protected by the protect-list.");
@@ -69,20 +75,20 @@ final class UploadCommand extends AbstractSyncCommand
         }
 
         if ((bool) $input->getOption('dry-run')) {
-            foreach ($files as $rel => $e) {
-                $output->writeln("<fg=green>↑ $rel</>");
+            foreach ($items as $item) {
+                $output->writeln("<fg=green>↑ {$item->targetPath}</>");
             }
             foreach ($toDelete as $rel) {
                 $output->writeln("<fg=red>␡ $rel</>");
             }
-            $io->note(sprintf('dry run: %d to upload, %d to delete.', count($files), count($toDelete)));
+            $io->note(sprintf('dry run: %d to upload, %d to delete.', count($items), count($toDelete)));
             return Command::SUCCESS;
         }
 
         $uploader = new Uploader($http, $config->localRoot, $caps, $config->compress, $config->compressSkipExt);
         $ok = 0;
         $fail = 0;
-        $uploader->upload($files, static function (string $rel, bool $success, ?string $err) use ($output, &$ok, &$fail): void {
+        $uploader->upload($items, static function (string $rel, bool $success, ?string $err) use ($output, &$ok, &$fail): void {
             if ($success) {
                 $ok++;
                 $output->writeln("<fg=green>↑ $rel</>");

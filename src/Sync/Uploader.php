@@ -39,27 +39,29 @@ final class Uploader
     }
 
     /**
-     * @param array<string, FileEntry> $files rel => entry (local)
+     * @param list<TransferItem> $items  read from sourcePath (local), written under targetPath (remote)
      * @param callable(string $rel, bool $ok, ?string $err): void $onResult
      */
-    public function upload(array $files, callable $onResult): void
+    public function upload(array $items, callable $onResult): void
     {
         /** @var list<array{rel:string, tmp:string, size:int}> $batch */
         $batch = [];
         $batchBytes = 0;
 
-        foreach ($files as $rel => $entry) {
-            $abs = $this->localRoot . '/' . $rel;
+        foreach ($items as $item) {
+            $abs = $this->localRoot . '/' . $item->sourcePath;
             if (!is_file($abs)) {
-                $onResult($rel, false, 'local file disappeared');
+                $onResult($item->targetPath, false, 'local file disappeared');
                 continue;
             }
-            $gz = $this->compress && !$this->skipped($rel);
-            $frame = FrameWriter::buildFrame($rel, $abs, $gz);
+            $gz = $this->compress && !$this->skipped($item->sourcePath);
+            // Frame path = the TARGET (remote) name, so a modified file overwrites
+            // the existing remote entry instead of creating a normalization duplicate.
+            $frame = FrameWriter::buildFrame($item->targetPath, $abs, $gz);
 
             if ($frame['size'] > $this->limit) {
                 @unlink($frame['tmp']);
-                $onResult($rel, false, sprintf(
+                $onResult($item->targetPath, false, sprintf(
                     'file is larger than the server post_max_size (%s > %s) - bulk upload cannot transfer it',
                     $this->human($frame['size']),
                     $this->human($this->limit),
@@ -71,7 +73,7 @@ final class Uploader
                 $batch = [];
                 $batchBytes = 0;
             }
-            $batch[] = ['rel' => $rel, 'tmp' => $frame['tmp'], 'size' => $frame['size']];
+            $batch[] = ['rel' => $item->targetPath, 'tmp' => $frame['tmp'], 'size' => $frame['size']];
             $batchBytes += $frame['size'];
         }
         $this->flush($batch, $onResult);

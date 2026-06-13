@@ -16,6 +16,9 @@
         "ext-zlib": "*",
         "symfony/console": "^7.1"
     },
+    "suggest": {
+        "ext-intl": "Unicode path normalization (NFC/NFD) so accented filenames match across macOS (NFD) and Linux (NFC) servers"
+    },
     "autoload": {
         "psr-4": {
             "JakubBoucek\\Psync\\": "src/"

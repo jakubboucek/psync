@@ -62,6 +62,12 @@ documentation is in [README.md](README.md); here are the things important for ed
   not overwriting during download (extra protected directories typically belong to `ignore` as well).
 - **The macOS client cannot create a non-UTF8 name** (APFS) — so Windows-1250 names are covered only by
   `tests/Unit/Wire.phpt` at the Wire level, not by integration tests.
+- **Unicode NFC/NFD**: macOS lists names as NFD, Linux servers as NFC, so the same file would otherwise be
+  both `>` and `<`. `Comparator` keys its maps by `PathNormalizer::key()` (NFC, needs `ext-intl`; falls back to
+  raw bytes without it or for non-UTF8), but keeps the **original per-side bytes** in `FileEntry->path` for all
+  I/O. Transfers carry an explicit `TransferItem{sourcePath,targetPath}` so a modified accented file overwrites
+  the existing entry on the far side instead of creating a duplicate; the agent always receives the remote
+  original bytes for `hash`/`download`/`delete`.
 
 ## Quality control and testing
 

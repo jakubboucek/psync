@@ -6,6 +6,7 @@ namespace JakubBoucek\Psync\Command;
 
 use JakubBoucek\Psync\Console\Reporter;
 use JakubBoucek\Psync\Sync\Downloader;
+use JakubBoucek\Psync\Sync\TransferItem;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -38,27 +39,32 @@ final class DownloadCommand extends AbstractSyncCommand
 
         $comparison = $this->buildComparator($config, $input, $http, $reporter)->compare($this->scope($input));
 
-        // remote → local: missing locally + differing in content
-        $files = $comparison->remoteOnly;
-        foreach ($comparison->modified as $rel => $pair) {
-            $files[$rel] = $pair['remote'];
+        // remote → local: missing locally (source = target = remote name) +
+        // differing in content (written under the existing local name to avoid
+        // normalization duplicates).
+        $items = [];
+        foreach ($comparison->remoteOnly as $e) {
+            $items[] = new TransferItem($e->path, $e->path, $e->size);
+        }
+        foreach ($comparison->modified as $pair) {
+            $items[] = new TransferItem($pair['remote']->path, $pair['local']->path, $pair['remote']->size);
         }
 
         $delete = (bool) $input->getOption('delete');
         $protect = $this->buildProtect($config);
-        $toDelete = [];
+        $toDelete = []; // local original paths to delete
         $protectedCount = 0;
         if ($delete) {
             foreach ($comparison->localOnly as $rel => $e) {
                 if ($protect->matches($rel)) {
                     $protectedCount++;
                 } else {
-                    $toDelete[] = $rel;
+                    $toDelete[] = $e->path;
                 }
             }
         }
 
-        if ($files === [] && $toDelete === []) {
+        if ($items === [] && $toDelete === []) {
             $io->success('Nothing to download – the local copy is in sync.');
             if ($protectedCount > 0) {
                 $io->note("$protectedCount local files are extra but protected by the protect-list.");
@@ -67,20 +73,20 @@ final class DownloadCommand extends AbstractSyncCommand
         }
 
         if ((bool) $input->getOption('dry-run')) {
-            foreach ($files as $rel => $e) {
-                $output->writeln("<fg=green>↓ $rel</>");
+            foreach ($items as $item) {
+                $output->writeln("<fg=green>↓ {$item->targetPath}</>");
             }
             foreach ($toDelete as $rel) {
                 $output->writeln("<fg=red>␡ $rel</>");
             }
-            $io->note(sprintf('dry run: %d to download, %d to delete locally.', count($files), count($toDelete)));
+            $io->note(sprintf('dry run: %d to download, %d to delete locally.', count($items), count($toDelete)));
             return Command::SUCCESS;
         }
 
         $downloader = new Downloader($http, $config->localRoot, $config->compress, $config->compressSkipExt);
         $ok = 0;
         $fail = 0;
-        $downloader->download($files, static function (string $rel, bool $success, ?string $err) use ($output, &$ok, &$fail): void {
+        $downloader->download($items, static function (string $rel, bool $success, ?string $err) use ($output, &$ok, &$fail): void {
             if ($success) {
                 $ok++;
                 $output->writeln("<fg=green>↓ $rel</>");

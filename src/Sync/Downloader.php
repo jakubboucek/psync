@@ -33,37 +33,46 @@ final class Downloader
     }
 
     /**
-     * @param array<string, FileEntry> $files rel => entry (remote)
+     * @param list<TransferItem> $items  requested from sourcePath (remote), written under targetPath (local)
      * @param callable(string $rel, bool $ok, ?string $err): void $onResult
      */
-    public function download(array $files, callable $onResult): void
+    public function download(array $items, callable $onResult): void
     {
+        /** @var list<TransferItem> $batch */
         $batch = [];
         $batchBytes = 0;
 
-        foreach ($files as $rel => $entry) {
-            if ($batch !== [] && ($batchBytes + $entry->size > self::BATCH_BYTES || count($batch) >= self::BATCH_FILES)) {
+        foreach ($items as $item) {
+            if ($batch !== [] && ($batchBytes + $item->size > self::BATCH_BYTES || count($batch) >= self::BATCH_FILES)) {
                 $this->fetchBatch($batch, $onResult);
                 $batch = [];
                 $batchBytes = 0;
             }
-            $batch[] = $rel;
-            $batchBytes += $entry->size;
+            $batch[] = $item;
+            $batchBytes += $item->size;
         }
         $this->fetchBatch($batch, $onResult);
     }
 
     /**
-     * @param list<string> $rels
+     * @param list<TransferItem> $items
      * @param callable(string, bool, ?string): void $onResult
      */
-    private function fetchBatch(array $rels, callable $onResult): void
+    private function fetchBatch(array $items, callable $onResult): void
     {
-        if ($rels === []) {
+        if ($items === []) {
             return;
         }
+        // The agent frames each file under the path it was requested with (the
+        // remote/source bytes); map that back to the local target to write under.
+        $targetBySource = [];
+        $paths = [];
+        foreach ($items as $item) {
+            $targetBySource[$item->sourcePath] = $item->targetPath;
+            $paths[] = Wire::encPath($item->sourcePath);
+        }
         $payload = [
-            'files' => array_map(static fn(string $r): string => Wire::encPath($r), $rels),
+            'files' => $paths,
             'compress' => $this->compress,
             'skipExt' => $this->skipExt,
         ];
@@ -76,10 +85,11 @@ final class Downloader
                 throw new RuntimeException('Cannot open the downloaded data.');
             }
             while (($header = Wire::readFrameHeader($in)) !== null) {
-                $rel = $header->path;
-                $err = $this->writeFrame($in, $header);
-                $received[$rel] = true;
-                $onResult($rel, $err === null, $err);
+                $source = $header->path;
+                $target = $targetBySource[$source] ?? $source;
+                $err = $this->writeFrame($in, $header, $target);
+                $received[$source] = true;
+                $onResult($target, $err === null, $err);
             }
             fclose($in);
         } finally {
@@ -87,21 +97,21 @@ final class Downloader
         }
 
         // Files the server did not return (skipped - missing/unreadable).
-        foreach ($rels as $rel) {
-            if (!isset($received[$rel])) {
-                $onResult($rel, false, 'server did not return the file');
+        foreach ($items as $item) {
+            if (!isset($received[$item->sourcePath])) {
+                $onResult($item->targetPath, false, 'server did not return the file');
             }
         }
     }
 
     /**
-     * Writes a single frame atomically. Returns null on success, otherwise an error.
+     * Writes a single frame atomically under $targetRel. Returns null on success, otherwise an error.
      *
      * @param resource $in
      */
-    private function writeFrame($in, FrameHeader $header): ?string
+    private function writeFrame($in, FrameHeader $header, string $targetRel): ?string
     {
-        $target = $this->localRoot . '/' . $header->path;
+        $target = $this->localRoot . '/' . $targetRel;
         $dir = dirname($target);
         if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
             $this->discard($in, $header->payloadLen);

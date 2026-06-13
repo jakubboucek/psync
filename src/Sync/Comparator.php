@@ -121,7 +121,7 @@ final class Comparator
         $remoteHashes = $this->remoteHashes($needHash);
 
         foreach ($needHash as $rel => $pair) {
-            $localMd5 = @hash_file(Protocol::HASH_ALGO, $this->localRoot . '/' . $rel);
+            $localMd5 = @hash_file(Protocol::HASH_ALGO, $this->localRoot . '/' . $pair['local']->path);
             $remoteMd5 = $remoteHashes[$rel] ?? null;
             $eq = ($localMd5 !== false && $remoteMd5 !== null && $localMd5 === $remoteMd5);
 
@@ -160,27 +160,39 @@ final class Comparator
         $done = 0;
         $this->reporter?->progressStart('Hashing:');
 
+        // The agent must receive the REMOTE original bytes (so it can find the
+        // file on a normalization-sensitive FS); the result is mapped back to the
+        // normalized comparison key. The agent echoes back the exact base64 we sent.
         $flush = function (array $batch) use (&$result, &$done, $total): void {
             if ($batch === []) {
                 return;
             }
-            $paths = array_map(static fn(string $rel): string => Wire::encPath($rel), $batch);
-            $this->http->streamJson(Protocol::ACTION_HASH, ['paths' => array_values($paths)], function (array $o) use (&$result, &$done, $total): void {
+            $bySent = [];
+            $paths = [];
+            foreach ($batch as $item) {
+                $b64 = Wire::encPath($item['remote']);
+                $paths[] = $b64;
+                $bySent[$b64] = $item['key'];
+            }
+            $this->http->streamJson(Protocol::ACTION_HASH, ['paths' => $paths], function (array $o) use (&$result, &$done, $total, $bySent): void {
                 if (isset($o['p']) && array_key_exists('h', $o) && $o['h'] !== null) {
-                    $result[Wire::decPath($o['p'])] = (string) $o['h'];
-                    $this->reporter?->progressUpdate(++$done, $total);
+                    $key = $bySent[(string) $o['p']] ?? null;
+                    if ($key !== null) {
+                        $result[$key] = (string) $o['h'];
+                        $this->reporter?->progressUpdate(++$done, $total);
+                    }
                 }
             });
         };
 
-        foreach ($candidates as $rel => $pair) {
+        foreach ($candidates as $key => $pair) {
             $size = $pair['remote']->size;
             if ($batch !== [] && ($batchBytes + $size > self::HASH_BATCH_BYTES || count($batch) >= self::HASH_BATCH_FILES)) {
                 $flush($batch);
                 $batch = [];
                 $batchBytes = 0;
             }
-            $batch[] = $rel;
+            $batch[] = ['key' => $key, 'remote' => $pair['remote']->path];
             $batchBytes += $size;
         }
         $flush($batch);
@@ -198,7 +210,9 @@ final class Comparator
         $this->reporter?->progressStart('Scanning local:');
         $n = 0;
         foreach ($this->walker->walk($scope) as $entry) {
-            $map[$entry->path] = $entry;
+            // Key by NFC-normalized path so NFD (macOS) and NFC (server) forms of
+            // the same name match; FileEntry keeps the original bytes for local I/O.
+            $map[PathNormalizer::key($entry->path)] = $entry;
             $this->reporter?->progressUpdate(++$n);
         }
         $this->reporter?->progressDone();
@@ -222,7 +236,7 @@ final class Comparator
             if ($this->ignore->matches($rel)) {
                 return;
             }
-            $map[$rel] = new FileEntry($rel, (int) ($o['s'] ?? 0), (int) ($o['m'] ?? 0));
+            $map[PathNormalizer::key($rel)] = new FileEntry($rel, (int) ($o['s'] ?? 0), (int) ($o['m'] ?? 0));
         });
         $this->reporter?->progressDone();
         return $map;
