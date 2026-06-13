@@ -23,7 +23,7 @@ final class InstallCommand extends Command
         $this
             ->setName('install')
             ->setDescription('Generates the server agent and a key pair.')
-            ->addOption('output', 'o', InputOption::VALUE_REQUIRED, 'Where to write the rendered agent (default: a randomized psync-agent-<nonce>.php).')
+            ->addOption('output', 'o', InputOption::VALUE_REQUIRED, 'Where to write the rendered agent (default: a randomized psync-agent-<nonce>.php).', 'psync-agent-<nonce>.php')
             ->addOption('config', 'c', InputOption::VALUE_REQUIRED, 'Path to the configuration file.', 'psync.php')
             ->addOption('force', 'f', InputOption::VALUE_NONE, 'Overwrite existing files without asking.');
     }
@@ -32,11 +32,9 @@ final class InstallCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
 
-        // Randomized filename so the agent URL cannot be guessed/scanned for –
-        // a safety net should a vulnerability ever be found in the agent.
-        $agentFile = 'psync-agent-' . bin2hex(random_bytes(3)) . '.php';
-        $explicitOutput = $input->getOption('output');
-        $agentPath = $explicitOutput !== null ? (string) $explicitOutput : $agentFile;
+        $agentPath = $input->getOption('output');
+        // If the value contanins <nonce>, replace it with a random nonce to avoid overwriting existing agents.
+        $agentPath = str_replace('<nonce>', bin2hex(random_bytes(3)), $agentPath);
         $configPath = (string) $input->getOption('config');
         $force = (bool) $input->getOption('force');
 
