@@ -53,26 +53,32 @@ final class CompareCommand extends AbstractSyncCommand
 
     private function render(SymfonyStyle $io, OutputInterface $output, Comparison $c): void
     {
-        $verbose = $output->isVerbose();
-
-        if ($verbose) {
+        // Build one list keyed by path so entries from the same directory stay
+        // together, then sort by path (regardless of status).
+        $lines = [];
+        if ($output->isVerbose()) {
             foreach ($c->equal as $rel) {
-                $output->writeln("<fg=gray>=  $rel</>");
+                $lines[$rel] = "<fg=gray>=  $rel</>";
             }
         }
         foreach ($c->modified as $rel => $pair) {
-            $output->writeln(sprintf(
+            $lines[$rel] = sprintf(
                 "<fg=yellow>M  %s</> <fg=gray>(local %s / remote %s)</>",
                 $rel,
                 $this->bytes($pair['local']->size),
                 $this->bytes($pair['remote']->size),
-            ));
+            );
         }
         foreach ($c->localOnly as $rel => $e) {
-            $output->writeln("<fg=green>>  $rel</> <fg=gray>({$this->bytes($e->size)})</>");
+            $lines[$rel] = "<fg=green>>  $rel</> <fg=gray>({$this->bytes($e->size)})</>";
         }
         foreach ($c->remoteOnly as $rel => $e) {
-            $output->writeln("<fg=red><  $rel</> <fg=gray>({$this->bytes($e->size)})</>");
+            $lines[$rel] = "<fg=red><  $rel</> <fg=gray>({$this->bytes($e->size)})</>";
+        }
+
+        ksort($lines, SORT_STRING);
+        foreach ($lines as $line) {
+            $output->writeln($line);
         }
 
         $io->newLine();
