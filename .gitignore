@@ -5,6 +5,7 @@
 /tests/local/
 /tests/remote/
 /tests/*.config.php
+/tests/.smoke_priv
 
 # Vygenerovaný agent a config s privátním klíčem
 agent.php
