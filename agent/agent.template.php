@@ -268,7 +268,11 @@ function dispatch(array $CONFIG, string $action, $body): void
             handle_hash($CONFIG, json_body($body));
             return;
         case 'download':
+            handle_download($CONFIG, json_body($body));
+            return;
         case 'upload':
+            handle_upload($CONFIG, $body);
+            return;
         case 'delete':
             throw new AgentError("Akce '$action' bude implementována v další fázi.", 501);
         default:
@@ -390,6 +394,321 @@ function handle_hash(array $CONFIG, array $req): void
 
 
 // ===========================================================================
+// Handler: download (remote → klient, binární framing)
+// ===========================================================================
+
+/**
+ * Vstup: {files:[base64], compress:bool, skipExt:[ext]}.
+ * Streamuje per-soubor frame: hlavička + (volitelně gz) payload.
+ * Chybějící/nečitelné soubory tiše přeskočí (klient si je doptá / nahlásí).
+ */
+function handle_download(array $CONFIG, array $req): void
+{
+    $root = $CONFIG['root'];
+    $files = isset($req['files']) && is_array($req['files']) ? $req['files'] : array();
+    $compress = !empty($req['compress']);
+    $skip = array();
+    if (isset($req['skipExt']) && is_array($req['skipExt'])) {
+        foreach ($req['skipExt'] as $e) {
+            $skip[strtolower((string) $e)] = true;
+        }
+    }
+
+    header('Content-Type: application/octet-stream');
+
+    foreach ($files as $p64) {
+        $rel = base64_decode((string) $p64, true);
+        if ($rel === false) {
+            continue;
+        }
+        $abs = resolve_scope($root, $rel);
+        if ($abs === null || !is_file($abs)) {
+            continue;
+        }
+        $size = (int) filesize($abs);
+        $mtime = (int) filemtime($abs);
+        $ext = strtolower((string) pathinfo($rel, PATHINFO_EXTENSION));
+        $gz = $compress && !isset($skip[$ext]);
+
+        if ($gz) {
+            $tmp = gz_to_temp($abs, $md5raw, $plen);
+            if ($tmp === null) {
+                continue;
+            }
+            echo frame_pack_header($rel, FLAG_GZIP, $mtime, $size, $plen, $md5raw);
+            $fh = fopen($tmp, 'rb');
+            if ($fh !== false) {
+                while (!feof($fh)) {
+                    $c = fread($fh, CHUNK);
+                    if ($c !== false && $c !== '') {
+                        echo $c;
+                    }
+                }
+                fclose($fh);
+            }
+            @unlink($tmp);
+        } else {
+            $md5raw = md5_file($abs, true);
+            if ($md5raw === false) {
+                continue;
+            }
+            echo frame_pack_header($rel, 0, $mtime, $size, $size, $md5raw);
+            $fh = fopen($abs, 'rb');
+            if ($fh !== false) {
+                while (!feof($fh)) {
+                    $c = fread($fh, CHUNK);
+                    if ($c !== false && $c !== '') {
+                        echo $c;
+                    }
+                }
+                fclose($fh);
+            }
+        }
+        @flush();
+    }
+}
+
+
+// ===========================================================================
+// Handler: upload (klient → remote, binární framing)
+// ===========================================================================
+
+/**
+ * Tělo (už streamnuté do temp v read_body) obsahuje sekvenci framů.
+ * Každý soubor se zapíše atomicky (tmp + rename), nastaví se mtime zdroje,
+ * ověří se md5. Výsledek per-soubor jako NDJSON.
+ *
+ * @param array $body ['tmp' => path, 'sha256' => hex]
+ */
+function handle_upload(array $CONFIG, $body): void
+{
+    if (!is_array($body)) {
+        throw new AgentError('Upload očekává binární tělo.', 400);
+    }
+    $root = $CONFIG['root'];
+    header('Content-Type: application/x-ndjson; charset=utf-8');
+
+    $in = fopen($body['tmp'], 'rb');
+    if ($in === false) {
+        throw new AgentError('Nelze otevřít tělo uploadu.', 500);
+    }
+
+    while (($h = frame_read_header($in)) !== null) {
+        $rel = $h['path'];
+        $abs = resolve_scope($root, $rel);
+        if ($abs === null) {
+            skip_bytes($in, $h['payloadLen']);
+            emit(array('p' => base64_encode($rel), 'ok' => false, 'err' => 'cesta mimo rozsah'));
+            continue;
+        }
+        $err = write_upload_file($abs, $in, $h);
+        emit(array('p' => base64_encode($rel), 'ok' => $err === null, 'err' => $err));
+    }
+
+    fclose($in);
+    @unlink($body['tmp']);
+    emit(array('end' => true));
+}
+
+/**
+ * Zapíše jeden soubor z framu atomicky. Vrátí null při úspěchu, jinak chybu.
+ *
+ * @param resource $in
+ * @param array $h hlavička framu
+ * @return string|null
+ */
+function write_upload_file(string $abs, $in, array $h)
+{
+    $dir = dirname($abs);
+    if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+        skip_bytes($in, $h['payloadLen']);
+        return 'nelze vytvořit adresář';
+    }
+
+    $tmp = $abs . '.phpsync-' . substr(md5($abs . $h['mtime']), 0, 8) . '.tmp';
+    $out = fopen($tmp, 'wb');
+    if ($out === false) {
+        skip_bytes($in, $h['payloadLen']);
+        return 'nelze otevřít cílový temp';
+    }
+
+    $ctx = hash_init('md5');
+    $gz = ($h['flags'] & FLAG_GZIP) !== 0;
+    $inflate = $gz ? inflate_init(ZLIB_ENCODING_GZIP) : null;
+    $remaining = $h['payloadLen'];
+
+    while ($remaining > 0) {
+        $chunk = fread($in, $remaining < CHUNK ? $remaining : CHUNK);
+        if ($chunk === false || $chunk === '') {
+            fclose($out);
+            @unlink($tmp);
+            return 'useknutý payload';
+        }
+        $remaining -= strlen($chunk);
+        if ($gz) {
+            $chunk = inflate_add($inflate, $chunk, ZLIB_NO_FLUSH);
+            if ($chunk === false) {
+                fclose($out);
+                @unlink($tmp);
+                return 'chyba dekomprese';
+            }
+        }
+        if ($chunk !== '') {
+            hash_update($ctx, $chunk);
+            fwrite($out, $chunk);
+        }
+    }
+    if ($gz) {
+        $tail = inflate_add($inflate, '', ZLIB_FINISH);
+        if ($tail === false) {
+            fclose($out);
+            @unlink($tmp);
+            return 'chyba dekomprese (finish)';
+        }
+        if ($tail !== '') {
+            hash_update($ctx, $tail);
+            fwrite($out, $tail);
+        }
+    }
+    fclose($out);
+
+    if (hash_final($ctx, true) !== $h['md5']) {
+        @unlink($tmp);
+        return 'md5 nesouhlasí';
+    }
+    if (!@rename($tmp, $abs)) {
+        @unlink($tmp);
+        return 'rename selhal';
+    }
+    @touch($abs, $h['mtime']);
+    return null;
+}
+
+
+// ===========================================================================
+// Binární framing (musí ladit s klientem – PhpSync\Protocol\Wire)
+// ===========================================================================
+
+function frame_pack_header(string $path, int $flags, int $mtime, int $origSize, int $payloadLen, string $md5raw): string
+{
+    return pack('N', strlen($path)) . $path
+        . pack('C', $flags)
+        . pack('J', $mtime)
+        . pack('J', $origSize)
+        . pack('J', $payloadLen)
+        . $md5raw;
+}
+
+/**
+ * Přečte hlavičku framu. Vrátí null na čistém EOF.
+ *
+ * @param resource $in
+ * @return array|null
+ */
+function frame_read_header($in)
+{
+    $lenRaw = stream_read_exact($in, 4, true);
+    if ($lenRaw === null) {
+        return null;
+    }
+    $pathLen = unpack('N', $lenRaw)[1];
+    $path = $pathLen > 0 ? stream_read_exact($in, $pathLen) : '';
+    $fixed = stream_read_exact($in, 41);
+    return array(
+        'path' => $path,
+        'flags' => unpack('C', substr($fixed, 0, 1))[1],
+        'mtime' => unpack('J', substr($fixed, 1, 8))[1],
+        'origSize' => unpack('J', substr($fixed, 9, 8))[1],
+        'payloadLen' => unpack('J', substr($fixed, 17, 8))[1],
+        'md5' => substr($fixed, 25, 16),
+    );
+}
+
+/**
+ * @param resource $in
+ * @return string|null
+ */
+function stream_read_exact($in, int $n, bool $allowEof = false)
+{
+    if ($n === 0) {
+        return '';
+    }
+    $buf = '';
+    while (strlen($buf) < $n) {
+        $chunk = fread($in, $n - strlen($buf));
+        if ($chunk === false || $chunk === '') {
+            if ($allowEof && $buf === '') {
+                return null;
+            }
+            throw new AgentError('Useknutý frame ve streamu uploadu.', 400);
+        }
+        $buf .= $chunk;
+    }
+    return $buf;
+}
+
+/**
+ * @param resource $in
+ */
+function skip_bytes($in, int $n): void
+{
+    while ($n > 0) {
+        $chunk = fread($in, $n < CHUNK ? $n : CHUNK);
+        if ($chunk === false || $chunk === '') {
+            return;
+        }
+        $n -= strlen($chunk);
+    }
+}
+
+/**
+ * Zkomprimuje soubor do dočasného souboru (streamovaně, gzip).
+ * Naplní $md5raw (md5 originálu, raw) a $plen (velikost komprimátu).
+ * Vrátí cestu k temp souboru nebo null při chybě.
+ *
+ * @param string $md5raw (out)
+ * @param int $plen (out)
+ * @return string|null
+ */
+function gz_to_temp(string $abs, &$md5raw, &$plen)
+{
+    $in = fopen($abs, 'rb');
+    $tmp = tempnam(sys_get_temp_dir(), 'phpsync_dl_');
+    if ($in === false || $tmp === false) {
+        if ($in !== false) {
+            fclose($in);
+        }
+        return null;
+    }
+    $out = fopen($tmp, 'wb');
+    if ($out === false) {
+        fclose($in);
+        @unlink($tmp);
+        return null;
+    }
+    $ctx = hash_init('md5');
+    $deflate = deflate_init(ZLIB_ENCODING_GZIP);
+    while (!feof($in)) {
+        $chunk = fread($in, CHUNK);
+        if ($chunk === false) {
+            break;
+        }
+        if ($chunk !== '') {
+            hash_update($ctx, $chunk);
+            fwrite($out, deflate_add($deflate, $chunk, ZLIB_NO_FLUSH));
+        }
+    }
+    fwrite($out, deflate_add($deflate, '', ZLIB_FINISH));
+    fclose($in);
+    fclose($out);
+
+    $md5raw = hash_final($ctx, true);
+    $plen = (int) filesize($tmp);
+    return $tmp;
+}
+
+
+// ===========================================================================
 // Souborové utility
 // ===========================================================================
 
@@ -452,20 +771,36 @@ function resolve_scope(string $root, string $rel)
             return null;
         }
     }
-    $rootReal = rtrim($root, '/');
+    $rootResolved = realpath($root);
+    $rootReal = rtrim($rootResolved !== false ? $rootResolved : $root, '/');
     $candidate = $rootReal . '/' . $rel;
 
     // Pokud existuje, ověř realpath uvnitř rootu (obrana proti symlinkům v cestě).
     $real = realpath($candidate);
     if ($real !== false) {
-        $prefix = $rootReal . '/';
-        if ($real !== $rootReal && strncmp($real . '/', $prefix, strlen($prefix)) !== 0) {
-            return null;
-        }
-        return $real;
+        return path_within($real, $rootReal) ? $real : null;
     }
-    // Neexistuje (typicky cíl uploadu) – stačí, že je textově uvnitř rootu.
+
+    // Neexistuje (typicky cíl uploadu) – ověř nejhlubšího existujícího předka,
+    // ať symlinkovaný rodič neumožní únik z rootu.
+    $parent = $candidate;
+    do {
+        $parent = dirname($parent);
+    } while ($parent !== '/' && $parent !== '.' && $parent !== '' && !file_exists($parent));
+
+    $parentReal = realpath($parent);
+    if ($parentReal !== false && !path_within($parentReal, $rootReal)) {
+        return null;
+    }
     return $candidate;
+}
+
+/** Je $path uvnitř (nebo roven) $root? */
+function path_within(string $path, string $root): bool
+{
+    $path = rtrim($path, '/');
+    $root = rtrim($root, '/');
+    return $path === $root || strncmp($path . '/', $root . '/', strlen($root) + 1) === 0;
 }
 
 function ini_bytes(string $val): int

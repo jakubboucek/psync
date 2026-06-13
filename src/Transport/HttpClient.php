@@ -86,6 +86,84 @@ final class HttpClient
     }
 
     /**
+     * Stáhne binární odpověď (download) do dočasného souboru a vrátí jeho cestu.
+     * Volající je zodpovědný za smazání. Při HTTP chybě přečte tělo jako NDJSON
+     * a vyhodí výjimku.
+     *
+     * @param array<string, mixed> $payload
+     */
+    public function downloadToTemp(array $payload): string
+    {
+        $body = json_encode(['action' => Protocol::ACTION_DOWNLOAD] + $payload, JSON_UNESCAPED_SLASHES);
+        if ($body === false) {
+            throw new RuntimeException('Nelze zakódovat download request.');
+        }
+        $headers = $this->signedHeaders(Protocol::ACTION_DOWNLOAD, $body);
+        $headers[] = 'Content-Type: application/json';
+
+        $tmp = tempnam(sys_get_temp_dir(), 'phpsync_dl_');
+        if ($tmp === false) {
+            throw new RuntimeException('Nelze vytvořit dočasný soubor.');
+        }
+        $fh = fopen($tmp, 'wb');
+        if ($fh === false) {
+            throw new RuntimeException('Nelze otevřít dočasný soubor.');
+        }
+
+        $ch = curl_init($this->url);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $body,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_FILE => $fh,
+        ]);
+        $ok = curl_exec($ch);
+        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+        fclose($fh);
+
+        if ($ok === false) {
+            @unlink($tmp);
+            throw new RuntimeException("Spojení selhalo: $curlErr");
+        }
+        if ($code >= 400) {
+            $head = (string) file_get_contents($tmp, false, null, 0, 4096);
+            @unlink($tmp);
+            $msg = $head;
+            if (($obj = json_decode(trim(strtok($head, "\n") ?: ''), true)) && isset($obj['error'])) {
+                $msg = (string) $obj['error'];
+            }
+            throw new RuntimeException("Agent odpověděl HTTP $code: $msg");
+        }
+        return $tmp;
+    }
+
+    /**
+     * Pošle binární tělo uploadu (X-Sync-Action: upload), streamuje NDJSON výsledky.
+     *
+     * @param callable(array<string,mixed>):void $onLine
+     */
+    public function uploadBody(string $body, callable $onLine): void
+    {
+        $headers = $this->signedHeaders(Protocol::ACTION_UPLOAD, $body);
+        $headers[] = Protocol::HEADER_ACTION . ': ' . Protocol::ACTION_UPLOAD;
+        $headers[] = 'Content-Type: application/octet-stream';
+
+        $error = null;
+        $this->exec($body, $headers, static function (array $obj) use ($onLine, &$error): void {
+            if (isset($obj['error'])) {
+                $error = (string) $obj['error'];
+                return;
+            }
+            $onLine($obj);
+        });
+        if ($error !== null) {
+            throw new RuntimeException("Agent vrátil chybu: $error");
+        }
+    }
+
+    /**
      * @param string|resource $body  tělo (string pro JSON, resource pro binární upload)
      * @param list<string> $headers
      * @param callable(array<string,mixed>):void $onLine
