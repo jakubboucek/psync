@@ -1,31 +1,31 @@
 <?php
 /**
- * php-sync agent (server-side) – VYGENEROVANÝ SOUBOR.
+ * php-sync agent (server-side) – GENERATED FILE.
  *
- * Tento soubor se nahrává na cílový server přes FTP a volá se přes HTTP(S).
- * Cílová kompatibilita: PHP 7.4+ (bez Composer závislostí, jen ext-sodium).
+ * This file is uploaded to the target server over FTP and invoked over HTTP(S).
+ * Target compatibility: PHP 7.4+ (no Composer dependencies, only ext-sodium).
  *
- * Bezpečnost: drží POUZE veřejný klíč. Každý request musí být podepsán
- * privátním klíčem (Ed25519), který má jen klient. Únik tohoto souboru
- * neumožní útočníkovi nic podepsat.
+ * Security: holds ONLY the public key. Every request must be signed with the
+ * private key (Ed25519), which only the client has. A leak of this file does
+ * not allow an attacker to sign anything.
  *
- * NEUPRAVUJ ručně – přegeneruj příkazem `php-sync install`.
+ * DO NOT EDIT manually – regenerate with `php-sync install`.
  */
 
 declare(strict_types=1);
 
 // ---------------------------------------------------------------------------
-// Konfigurace (hodnoty doplňuje `install`)
+// Configuration (values filled in by `install`)
 // ---------------------------------------------------------------------------
 $CONFIG = array(
-    'publicKey'       => 'PHPSYNC_PUBLICKEY_PLACEHOLDER', // base64 veřejného klíče
+    'publicKey'       => 'PHPSYNC_PUBLICKEY_PLACEHOLDER', // base64 of the public key
     'protocolVersion' => 1,
-    'root'            => __DIR__,                          // remote root = adresář agenta
-    'protect'         => array(/* PHPSYNC_PROTECT */),     // glob vzory, které se nikdy nemažou
+    'root'            => __DIR__,                          // remote root = agent's directory
+    'protect'         => array(/* PHPSYNC_PROTECT */),     // glob patterns that are never deleted
 );
 
 // ---------------------------------------------------------------------------
-// Konstanty protokolu (musí ladit s klientem – PhpSync\Protocol\Protocol)
+// Protocol constants (must match the client – PhpSync\Protocol\Protocol)
 // ---------------------------------------------------------------------------
 const HEADER_TS = 'X-Sync-Ts';
 const HEADER_NONCE = 'X-Sync-Nonce';
@@ -37,37 +37,38 @@ const HASH_ALGO = 'md5';
 const CHUNK = 65536;
 
 (static function (array $CONFIG): void {
-    // Původní hodnoty zachyť DŘÍV, než je prepare_runtime() přepíše:
-    //  - max_execution_time vynuluje set_time_limit(0)
-    //  - zlib.output_compression agent za běhu vypne
-    // Klient je potřebuje znát (dávkování, info o serveru).
+    // Capture the original values BEFORE prepare_runtime() overwrites them:
+    //  - max_execution_time is zeroed by set_time_limit(0)
+    //  - zlib.output_compression is disabled by the agent at runtime
+    // The client needs to know them (batching, server info).
     $CONFIG['_maxExecutionTime'] = (int) ini_get('max_execution_time');
     $CONFIG['_zlibOutputCompression'] = ini_get('zlib.output_compression') ? true : false;
     prepare_runtime();
 
     try {
-        // Upload má binární tělo a akci v hlavičce; JSON akce mají akci v těle.
+        // Upload has a binary body and the action in a header; JSON actions carry the action in the body.
         $actionHeader = header_value(HEADER_ACTION);
         $isUpload = ($actionHeader === 'upload');
-        $body = read_body($isUpload); // JSON akce = string; upload = ['tmp' => path, 'sha256' => hex]
+        $body = read_body($isUpload); // JSON action = string; upload = ['tmp' => path, 'sha256' => hex]
         $action = detect_action($actionHeader, $body);
         authenticate($CONFIG, $action, $body);
         dispatch($CONFIG, $action, $body);
     } catch (AgentError $e) {
         send_error($e->getCode() ?: 400, $e->getMessage());
     } catch (\Throwable $e) {
-        send_error(500, 'Interní chyba agenta: ' . $e->getMessage());
+        send_error(500, 'Internal agent error: ' . $e->getMessage());
     }
 })($CONFIG);
 
 
 // ===========================================================================
-// Runtime příprava
+// Runtime preparation
 // ===========================================================================
 
 /**
- * Vypne transparentní kompresi/buffering serveru, aby nekolidovaly s vlastním
- * streamem a per-file GZ, a zkusí zrušit časový limit (best-effort).
+ * Disables the server's transparent compression/buffering so it does not
+ * collide with our own stream and per-file GZ, and tries to cancel the time
+ * limit (best-effort).
  */
 function prepare_runtime(): void
 {
@@ -102,7 +103,7 @@ function set_time_limit_available(): bool
 
 
 // ===========================================================================
-// Request: akce, tělo, autentizace
+// Request: action, body, authentication
 // ===========================================================================
 
 class AgentError extends \RuntimeException
@@ -110,9 +111,10 @@ class AgentError extends \RuntimeException
 }
 
 /**
- * Určí akci. Upload ji nese v hlavičce; JSON akce v poli 'action' těla.
- * Akci sice bereme z (zatím neověřeného) těla, ale tělo je součástí podpisu
- * přes svůj sha256 otisk – jakákoli změna akce v těle shodí ověření podpisu.
+ * Determines the action. Upload carries it in a header; JSON actions in the
+ * body's 'action' field. We take the action from the (not yet verified) body,
+ * but the body is part of the signature via its sha256 digest – any change to
+ * the action in the body breaks signature verification.
  *
  * @param string|array $body
  */
@@ -131,10 +133,10 @@ function detect_action(?string $actionHeader, $body): string
 }
 
 /**
- * Načte tělo requestu.
- *  - Upload (binární): streamuje php://input do temp souboru a zároveň počítá
- *    sha256 (kvůli podpisu) – nikdy nedrží celé tělo v paměti.
- *  - Ostatní (JSON): malé tělo se načte do paměti.
+ * Reads the request body.
+ *  - Upload (binary): streams php://input into a temp file while computing
+ *    sha256 (for the signature) – never holds the whole body in memory.
+ *  - Others (JSON): the small body is read into memory.
  *
  * @return string|array
  */
@@ -143,13 +145,13 @@ function read_body(bool $isUpload)
     if ($isUpload) {
         $tmp = tempnam(sys_get_temp_dir(), 'phpsync_up_');
         if ($tmp === false) {
-            throw new AgentError('Nelze vytvořit dočasný soubor.', 500);
+            throw new AgentError('Cannot create temporary file.', 500);
         }
         $in = fopen('php://input', 'rb');
         $out = fopen($tmp, 'wb');
         $ctx = hash_init('sha256');
         if ($in === false || $out === false) {
-            throw new AgentError('Nelze otevřít vstupní/dočasný stream.', 500);
+            throw new AgentError('Cannot open input/temporary stream.', 500);
         }
         while (!feof($in)) {
             $chunk = fread($in, CHUNK);
@@ -166,13 +168,13 @@ function read_body(bool $isUpload)
         return array('tmp' => $tmp, 'sha256' => hash_final($ctx));
     }
 
-    // JSON akce – tělo je malé.
+    // JSON action – the body is small.
     $raw = file_get_contents('php://input');
     return $raw === false ? '' : $raw;
 }
 
 /**
- * Ověří podpis, časové okno a (best-effort) replay nonce.
+ * Verifies the signature, the time window and (best-effort) the replay nonce.
  *
  * @param string|array $body
  */
@@ -183,10 +185,10 @@ function authenticate(array $CONFIG, string $action, $body): void
     $sigB64 = (string) header_value(HEADER_SIG);
 
     if ($action === '' || $nonce === '' || $sigB64 === '') {
-        throw new AgentError('Chybí povinné hlavičky podpisu.', 403);
+        throw new AgentError('Missing required signature headers.', 403);
     }
     if (abs(time() - $ts) > TIME_WINDOW) {
-        throw new AgentError('Časové razítko mimo povolené okno.', 403);
+        throw new AgentError('Timestamp outside the allowed window.', 403);
     }
 
     $bodyHash = is_array($body) ? $body['sha256'] : hash('sha256', $body);
@@ -199,18 +201,18 @@ function authenticate(array $CONFIG, string $action, $body): void
         || strlen($pub) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES
         || strlen($sig) !== SODIUM_CRYPTO_SIGN_BYTES
     ) {
-        throw new AgentError('Neplatný podpis.', 403);
+        throw new AgentError('Invalid signature.', 403);
     }
     if (!sodium_crypto_sign_verify_detached($sig, $message, $pub)) {
-        throw new AgentError('Neplatný podpis.', 403);
+        throw new AgentError('Invalid signature.', 403);
     }
 
     check_nonce_replay($nonce, $ts);
 }
 
 /**
- * Best-effort ochrana proti replay: ukládá nedávné nonce do stavového souboru.
- * Pokud zápis selže (read-only FS), spoléhá se jen na časové okno.
+ * Best-effort replay protection: stores recent nonces in a state file.
+ * If the write fails (read-only FS), it relies on the time window alone.
  */
 function check_nonce_replay(string $nonce, int $ts): void
 {
@@ -238,7 +240,7 @@ function check_nonce_replay(string $nonce, int $ts): void
     if (isset($seen[$nonce])) {
         flock($fh, LOCK_UN);
         fclose($fh);
-        throw new AgentError('Replay detekován (nonce už použit).', 403);
+        throw new AgentError('Replay detected (nonce already used).', 403);
     }
     $seen[$nonce] = $ts;
     ftruncate($fh, 0);
@@ -280,7 +282,7 @@ function dispatch(array $CONFIG, string $action, $body): void
             handle_delete($CONFIG, json_body($body));
             return;
         default:
-            throw new AgentError("Neznámá akce: '$action'.", 400);
+            throw new AgentError("Unknown action: '$action'.", 400);
     }
 }
 
@@ -291,11 +293,11 @@ function dispatch(array $CONFIG, string $action, $body): void
 function json_body($body): array
 {
     if (is_array($body)) {
-        throw new AgentError('Neočekávané binární tělo.', 400);
+        throw new AgentError('Unexpected binary body.', 400);
     }
     $data = json_decode($body, true);
     if (!is_array($data)) {
-        throw new AgentError('Neplatné JSON tělo.', 400);
+        throw new AgentError('Invalid JSON body.', 400);
     }
     return $data;
 }
@@ -328,17 +330,18 @@ function handle_capabilities(array $CONFIG): void
 
 
 // ===========================================================================
-// Handler: list (fáze 1 – rychlý sken)
+// Handler: list (phase 1 – fast scan)
 // ===========================================================================
 
 /**
- * Streamuje NDJSON {p: base64(relpath), s: size, m: mtime} v deterministickém
- * pořadí. Na konci úplného průchodu pošle {"end": true}.
+ * Streams NDJSON {p: base64(relpath), s: size, m: mtime} in a deterministic
+ * order. After a full traversal it sends {"end": true}.
  *
- * Resumabilita: list je rychlá metadatová fáze a očekává se, že se vejde do
- * limitu. Pokud klient nedostane {"end": true} (timeout/pád), zopakuje `list`
- * od začátku – průchod je deterministický a idempotentní. Drahá je až fáze
- * `hash`, kterou si klient dávkuje sám (tam je resumabilita zásadní).
+ * Resumability: list is a fast metadata phase and is expected to fit within
+ * the limit. If the client does not receive {"end": true} (timeout/crash), it
+ * repeats `list` from the start – the traversal is deterministic and
+ * idempotent. The expensive part is the `hash` phase, which the client batches
+ * itself (resumability matters there).
  */
 function handle_list(array $CONFIG, array $req): void
 {
@@ -349,11 +352,11 @@ function handle_list(array $CONFIG, array $req): void
     header('Content-Type: application/x-ndjson; charset=utf-8');
 
     if ($base === null) {
-        emit(array('error' => 'Cesta mimo povolený rozsah.'));
+        emit(array('error' => 'Path outside the allowed scope.'));
         return;
     }
     if (!file_exists($base)) {
-        emit(array('end' => true)); // scope neexistuje na serveru = prázdno
+        emit(array('end' => true)); // scope does not exist on the server = empty
         return;
     }
 
@@ -366,12 +369,12 @@ function handle_list(array $CONFIG, array $req): void
 
 
 // ===========================================================================
-// Handler: hash (fáze 2)
+// Handler: hash (phase 2)
 // ===========================================================================
 
 /**
- * Vstup: {paths: [base64, ...]}. Pro každou cestu streamuje md5 (hash_file).
- * Výstup NDJSON: {p, h} nebo {p, h:null} pokud soubor chybí/nečitelný.
+ * Input: {paths: [base64, ...]}. For each path it streams md5 (hash_file).
+ * NDJSON output: {p, h} or {p, h:null} if the file is missing/unreadable.
  */
 function handle_hash(array $CONFIG, array $req): void
 {
@@ -402,8 +405,9 @@ function handle_hash(array $CONFIG, array $req): void
 // ===========================================================================
 
 /**
- * Vstup: {paths:[base64]}. Smaže soubory, kromě těch v protect-listu (zazděn
- * při install). Druhá obranná linie – klient maže jen po vlastní kontrole.
+ * Input: {paths:[base64]}. Deletes files, except those in the protect list
+ * (baked in at install time). Second line of defense – the client only deletes
+ * after its own check.
  */
 function handle_delete(array $CONFIG, array $req): void
 {
@@ -424,15 +428,15 @@ function handle_delete(array $CONFIG, array $req): void
         }
         $abs = resolve_scope($root, $rel);
         if ($abs === null) {
-            emit(array('p' => $p64, 'ok' => false, 'err' => 'cesta mimo rozsah'));
+            emit(array('p' => $p64, 'ok' => false, 'err' => 'path outside scope'));
             continue;
         }
         if (!file_exists($abs)) {
-            emit(array('p' => $p64, 'ok' => true)); // už neexistuje = cíl splněn
+            emit(array('p' => $p64, 'ok' => true)); // already gone = goal met
             continue;
         }
         if (is_dir($abs) || is_link($abs)) {
-            emit(array('p' => $p64, 'ok' => false, 'err' => 'není běžný soubor'));
+            emit(array('p' => $p64, 'ok' => false, 'err' => 'not a regular file'));
             continue;
         }
         emit(array('p' => $p64, 'ok' => @unlink($abs)));
@@ -441,7 +445,7 @@ function handle_delete(array $CONFIG, array $req): void
 }
 
 /**
- * Odpovídá relativní cesta některému vzoru? (zrcadlí klientský IgnoreMatcher)
+ * Does the relative path match any pattern? (mirrors the client's IgnoreMatcher)
  */
 function path_matches_any(string $rel, array $patterns): bool
 {
@@ -475,13 +479,14 @@ function path_matches_any(string $rel, array $patterns): bool
 
 
 // ===========================================================================
-// Handler: download (remote → klient, binární framing)
+// Handler: download (remote → client, binary framing)
 // ===========================================================================
 
 /**
- * Vstup: {files:[base64], compress:bool, skipExt:[ext]}.
- * Streamuje per-soubor frame: hlavička + (volitelně gz) payload.
- * Chybějící/nečitelné soubory tiše přeskočí (klient si je doptá / nahlásí).
+ * Input: {files:[base64], compress:bool, skipExt:[ext]}.
+ * Streams a per-file frame: header + (optionally gz) payload.
+ * Missing/unreadable files are silently skipped (the client re-requests /
+ * reports them).
  */
 function handle_download(array $CONFIG, array $req): void
 {
@@ -551,27 +556,27 @@ function handle_download(array $CONFIG, array $req): void
 
 
 // ===========================================================================
-// Handler: upload (klient → remote, binární framing)
+// Handler: upload (client → remote, binary framing)
 // ===========================================================================
 
 /**
- * Tělo (už streamnuté do temp v read_body) obsahuje sekvenci framů.
- * Každý soubor se zapíše atomicky (tmp + rename), nastaví se mtime zdroje,
- * ověří se md5. Výsledek per-soubor jako NDJSON.
+ * The body (already streamed to temp in read_body) contains a sequence of
+ * frames. Each file is written atomically (tmp + rename), the source mtime is
+ * set, and md5 is verified. Per-file result as NDJSON.
  *
  * @param array $body ['tmp' => path, 'sha256' => hex]
  */
 function handle_upload(array $CONFIG, $body): void
 {
     if (!is_array($body)) {
-        throw new AgentError('Upload očekává binární tělo.', 400);
+        throw new AgentError('Upload expects a binary body.', 400);
     }
     $root = $CONFIG['root'];
     header('Content-Type: application/x-ndjson; charset=utf-8');
 
     $in = fopen($body['tmp'], 'rb');
     if ($in === false) {
-        throw new AgentError('Nelze otevřít tělo uploadu.', 500);
+        throw new AgentError('Cannot open the upload body.', 500);
     }
 
     while (($h = frame_read_header($in)) !== null) {
@@ -579,7 +584,7 @@ function handle_upload(array $CONFIG, $body): void
         $abs = resolve_scope($root, $rel);
         if ($abs === null) {
             skip_bytes($in, $h['payloadLen']);
-            emit(array('p' => base64_encode($rel), 'ok' => false, 'err' => 'cesta mimo rozsah'));
+            emit(array('p' => base64_encode($rel), 'ok' => false, 'err' => 'path outside scope'));
             continue;
         }
         $err = write_upload_file($abs, $in, $h);
@@ -592,10 +597,11 @@ function handle_upload(array $CONFIG, $body): void
 }
 
 /**
- * Zapíše jeden soubor z framu atomicky. Vrátí null při úspěchu, jinak chybu.
+ * Writes a single file from a frame atomically. Returns null on success,
+ * otherwise an error.
  *
  * @param resource $in
- * @param array $h hlavička framu
+ * @param array $h frame header
  * @return string|null
  */
 function write_upload_file(string $abs, $in, array $h)
@@ -603,14 +609,14 @@ function write_upload_file(string $abs, $in, array $h)
     $dir = dirname($abs);
     if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
         skip_bytes($in, $h['payloadLen']);
-        return 'nelze vytvořit adresář';
+        return 'cannot create directory';
     }
 
     $tmp = $abs . '.phpsync-' . substr(md5($abs . $h['mtime']), 0, 8) . '.tmp';
     $out = fopen($tmp, 'wb');
     if ($out === false) {
         skip_bytes($in, $h['payloadLen']);
-        return 'nelze otevřít cílový temp';
+        return 'cannot open target temp';
     }
 
     $ctx = hash_init('md5');
@@ -623,7 +629,7 @@ function write_upload_file(string $abs, $in, array $h)
         if ($chunk === false || $chunk === '') {
             fclose($out);
             @unlink($tmp);
-            return 'useknutý payload';
+            return 'truncated payload';
         }
         $remaining -= strlen($chunk);
         if ($gz) {
@@ -631,7 +637,7 @@ function write_upload_file(string $abs, $in, array $h)
             if ($chunk === false) {
                 fclose($out);
                 @unlink($tmp);
-                return 'chyba dekomprese';
+                return 'decompression error';
             }
         }
         if ($chunk !== '') {
@@ -644,7 +650,7 @@ function write_upload_file(string $abs, $in, array $h)
         if ($tail === false) {
             fclose($out);
             @unlink($tmp);
-            return 'chyba dekomprese (finish)';
+            return 'decompression error (finish)';
         }
         if ($tail !== '') {
             hash_update($ctx, $tail);
@@ -655,11 +661,11 @@ function write_upload_file(string $abs, $in, array $h)
 
     if (hash_final($ctx, true) !== $h['md5']) {
         @unlink($tmp);
-        return 'md5 nesouhlasí';
+        return 'md5 mismatch';
     }
     if (!@rename($tmp, $abs)) {
         @unlink($tmp);
-        return 'rename selhal';
+        return 'rename failed';
     }
     @touch($abs, $h['mtime']);
     return null;
@@ -667,7 +673,7 @@ function write_upload_file(string $abs, $in, array $h)
 
 
 // ===========================================================================
-// Binární framing (musí ladit s klientem – PhpSync\Protocol\Wire)
+// Binary framing (must match the client – PhpSync\Protocol\Wire)
 // ===========================================================================
 
 function frame_pack_header(string $path, int $flags, int $mtime, int $origSize, int $payloadLen, string $md5raw): string
@@ -681,7 +687,7 @@ function frame_pack_header(string $path, int $flags, int $mtime, int $origSize, 
 }
 
 /**
- * Přečte hlavičku framu. Vrátí null na čistém EOF.
+ * Reads a frame header. Returns null on a clean EOF.
  *
  * @param resource $in
  * @return array|null
@@ -721,7 +727,7 @@ function stream_read_exact($in, int $n, bool $allowEof = false)
             if ($allowEof && $buf === '') {
                 return null;
             }
-            throw new AgentError('Useknutý frame ve streamu uploadu.', 400);
+            throw new AgentError('Truncated frame in the upload stream.', 400);
         }
         $buf .= $chunk;
     }
@@ -743,9 +749,9 @@ function skip_bytes($in, int $n): void
 }
 
 /**
- * Zkomprimuje soubor do dočasného souboru (streamovaně, gzip).
- * Naplní $md5raw (md5 originálu, raw) a $plen (velikost komprimátu).
- * Vrátí cestu k temp souboru nebo null při chybě.
+ * Compresses a file into a temporary file (streamed, gzip).
+ * Fills $md5raw (md5 of the original, raw) and $plen (compressed size).
+ * Returns the path to the temp file or null on error.
  *
  * @param string $md5raw (out)
  * @param int $plen (out)
@@ -790,12 +796,12 @@ function gz_to_temp(string $abs, &$md5raw, &$plen)
 
 
 // ===========================================================================
-// Souborové utility
+// File utilities
 // ===========================================================================
 
 /**
- * Rekurzivně projde soubory pod $base (setříděně) a zavolá $cb($relPath, $stat).
- * Nesleduje symlinky (ochrana před smyčkami / únikem z rootu).
+ * Recursively walks the files under $base (sorted) and calls $cb($relPath, $stat).
+ * Does not follow symlinks (protection against loops / escaping the root).
  */
 function walk_files(string $root, string $base, callable $cb): void
 {
@@ -816,7 +822,7 @@ function walk_files(string $root, string $base, callable $cb): void
             }
             $full = $dir . '/' . $name;
             if (is_link($full)) {
-                continue; // symlinky ignorujeme
+                continue; // we ignore symlinks
             }
             if (is_dir($full)) {
                 $subdirs[] = $full;
@@ -827,7 +833,7 @@ function walk_files(string $root, string $base, callable $cb): void
                 }
             }
         }
-        // setříděně a tak, aby se zpracovaly před dalšími sourozeneckými adresáři
+        // sorted and so they are processed before the next sibling directories
         rsort($subdirs, SORT_STRING);
         foreach ($subdirs as $sd) {
             $stack[] = $sd;
@@ -836,8 +842,8 @@ function walk_files(string $root, string $base, callable $cb): void
 }
 
 /**
- * Sanitizace klientem dodané relativní cesty.
- * Vrátí absolutní cestu uvnitř $root, nebo null při pokusu o únik.
+ * Sanitization of the client-supplied relative path.
+ * Returns an absolute path inside $root, or null on an escape attempt.
  */
 function resolve_scope(string $root, string $rel)
 {
@@ -846,7 +852,7 @@ function resolve_scope(string $root, string $rel)
     if ($rel === '') {
         return rtrim($root, '/');
     }
-    // odmítni ../ ještě před realpath (realpath na neexistujícím vrátí false)
+    // reject ../ before realpath (realpath returns false on a nonexistent path)
     foreach (explode('/', $rel) as $seg) {
         if ($seg === '..' || $seg === '.') {
             return null;
@@ -856,14 +862,14 @@ function resolve_scope(string $root, string $rel)
     $rootReal = rtrim($rootResolved !== false ? $rootResolved : $root, '/');
     $candidate = $rootReal . '/' . $rel;
 
-    // Pokud existuje, ověř realpath uvnitř rootu (obrana proti symlinkům v cestě).
+    // If it exists, verify realpath inside the root (defense against symlinks in the path).
     $real = realpath($candidate);
     if ($real !== false) {
         return path_within($real, $rootReal) ? $real : null;
     }
 
-    // Neexistuje (typicky cíl uploadu) – ověř nejhlubšího existujícího předka,
-    // ať symlinkovaný rodič neumožní únik z rootu.
+    // Does not exist (typically an upload target) – verify the deepest existing
+    // ancestor, so a symlinked parent cannot allow escaping the root.
     $parent = $candidate;
     do {
         $parent = dirname($parent);
@@ -876,7 +882,7 @@ function resolve_scope(string $root, string $rel)
     return $candidate;
 }
 
-/** Je $path uvnitř (nebo roven) $root? */
+/** Is $path inside (or equal to) $root? */
 function path_within(string $path, string $root): bool
 {
     $path = rtrim($path, '/');
@@ -907,7 +913,7 @@ function ini_bytes(string $val): int
 
 
 // ===========================================================================
-// Výstup
+// Output
 // ===========================================================================
 
 function emit(array $obj): void
@@ -932,7 +938,7 @@ function header_value(string $name): ?string
     if (isset($_SERVER[$key])) {
         return $_SERVER[$key];
     }
-    // fallback přes getallheaders (některé SAPI)
+    // fallback via getallheaders (some SAPIs)
     if (function_exists('getallheaders')) {
         foreach (getallheaders() as $k => $v) {
             if (strcasecmp($k, $name) === 0) {

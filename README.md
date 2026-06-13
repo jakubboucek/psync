@@ -1,81 +1,81 @@
 # php-sync
 
-Obousměrná, rsync-podobná synchronizace souborů přes HTTP agenta pro **legacy hostingy, kde je jediný přístup FTP** (žádné SSH/rsync).
+Bidirectional, rsync-like file synchronization over an HTTP agent for **legacy hostings where FTP is the only access** (no SSH/rsync).
 
-Na server se jednorázově přes FTP nahraje jeden self-contained PHP soubor (agent). Klient (CLI, instalovaný jako `composer global`) ho pak volá přes HTTP(S) a umí soubory **porovnávat, nahrávat i stahovat** – i u aplikací s desítkami tisíc souborů, s ohledem na tvrdé limity sdílených hostingů.
+A single self-contained PHP file (the agent) is uploaded to the server once over FTP. The client (a CLI installed as `composer global`) then calls it over HTTP(S) and can **compare, upload, and download** files — even for applications with tens of thousands of files, while respecting the hard limits of shared hostings.
 
-- **Klient:** PHP 8.4+
-- **Agent (server):** PHP 7.4+, bez Composer závislostí (jen `ext-sodium`)
+- **Client:** PHP 8.4+
+- **Agent (server):** PHP 7.4+, no Composer dependencies (just `ext-sodium`)
 
-## Jak to funguje
+## How it works
 
-1. `php-sync install` vygeneruje pár klíčů **Ed25519** a serverového agenta s **veřejným** klíčem. Privátní klíč jde do tvého configu (a nikam jinam).
-2. Agenta nahraješ přes FTP do adresáře, který má být remote rootem.
-3. Klient podepisuje každý request privátním klíčem; agent ho ověří veřejným. **Únik agenta neumožní útočníkovi nic podepsat.**
+1. `php-sync install` generates an **Ed25519** key pair and a server agent containing the **public** key. The private key goes into your config (and nowhere else).
+2. You upload the agent over FTP to the directory that should become the remote root.
+3. The client signs every request with the private key; the agent verifies it with the public key. **A leaked agent does not allow an attacker to sign anything.**
 
-## Instalace
+## Installation
 
 ```bash
 composer global require jakubboucek/php-sync
 ```
 
-## Konfigurace
+## Configuration
 
-`php-sync install` vygeneruje `php-sync.php`. Doplň `url` a `mapping.local`:
+`php-sync install` generates `php-sync.php`. Fill in `url` and `mapping.local`:
 
 ```php
 <?php
 return [
     'url'        => 'https://example.com/agent.php',
-    'privateKey' => 'base64…',                 // z install, drž v tajnosti
+    'privateKey' => 'base64…',                 // from install, keep secret
     'mapping'    => ['local' => __DIR__, 'remote' => '/'],
     'ignore'     => ['/.git', '/vendor', '*.log', '/temp', '/uploads'],
-    'protect'    => ['/uploads', '/temp'],     // nikdy se nemažou
-    'checksum'   => false,                       // jako rsync -c
-    'compress'   => true,                        // GZ při přenosu
+    'protect'    => ['/uploads', '/temp'],     // never deleted
+    'checksum'   => false,                       // like rsync -c
+    'compress'   => true,                        // GZ during transfer
     'compressSkipExt' => ['jpg','png','zip','gz','pdf','mp4'],
 ];
 ```
 
-## Příkazy
+## Commands
 
 ```bash
-php-sync install [-o agent.php] [-c php-sync.php]   # vygeneruj agenta + klíče
-php-sync compare  [cesta] [-c …] [-v] [--checksum]  # vypiš rozdíly (nic nepřenáší)
-php-sync upload   [cesta] [--delete] [--dry-run]    # local → remote
-php-sync download [cesta] [--delete] [--dry-run]    # remote → local
+php-sync install [-o agent.php] [-c php-sync.php]   # generate agent + keys
+php-sync compare  [path] [-c …] [-v] [--checksum]   # list differences (transfers nothing)
+php-sync upload   [path] [--delete] [--dry-run]     # local → remote
+php-sync download [path] [--delete] [--dry-run]     # remote → local
 ```
 
-- Volitelná **`cesta`** omezí operaci na podadresář/soubor.
-- **`--delete`** smaže přebývající soubory (na druhé straně), **kromě `protect`**. Bez něj se nic nemaže.
-- **`--dry-run`** jen vypíše, co by se přeneslo/smazalo.
-- **`--checksum`** počítá hash vždy (ignoruje mtime i cache).
+- The optional **`path`** limits the operation to a subdirectory/file.
+- **`--delete`** deletes extra files (on the other side), **except for `protect`**. Without it, nothing is deleted.
+- **`--dry-run`** only prints what would be transferred/deleted.
+- **`--checksum`** always computes the hash (ignoring mtime and cache).
 
-Legenda `compare`: `>` jen lokálně · `<` jen na serveru · `M` liší se · `=` shodné.
+`compare` legend: `>` local only · `<` server only · `M` differs · `=` identical.
 
-## Jak se detekují změny (2 fáze)
+## How changes are detected (2 phases)
 
-1. **Rychlá fáze** – listing (jméno, velikost, mtime) na obou stranách.
-2. **Hash fáze** – jen pro soubory se shodnou velikostí a rozdílným mtime se dávkově (≤ 100 MB / ≤ 1000) spočítá md5. Výsledek se cachuje (`.php-sync-state.json`), takže se podruhé nehashuje.
+1. **Fast phase** — listing (name, size, mtime) on both sides.
+2. **Hash phase** — only for files with identical size and differing mtime, md5 is computed in batches (≤ 100 MB / ≤ 1000). The result is cached (`.php-sync-state.json`), so it is not hashed a second time.
 
-Každý přenesený soubor dostane **mtime podle zdroje**, zápis je **atomický** (tmp + rename).
+Every transferred file gets its **mtime from the source**, and the write is **atomic** (tmp + rename).
 
-## Bezpečnost
+## Security
 
-- Podpisy **Ed25519**; server drží jen veřejný klíč. Funguje i přes plain HTTP (podpis chrání integritu i identitu, timestamp + nonce brání replay).
-- **Privátní klíč v configu drž v tajnosti** a mimo veřejný git.
-- Všechny requesty jsou **POST** (akce v těle, ne v URL) kvůli WAF; upload má GZ default zapnutý i pro text, aby WAF neoznačil PHP zdroj za RCE.
-- Agent tvrdě **sanitizuje cesty** (žádné `../`, vše uvnitř rootu).
+- **Ed25519** signatures; the server holds only the public key. It works even over plain HTTP (the signature protects both integrity and identity, while a timestamp + nonce prevent replay).
+- **Keep the private key in the config secret** and out of public git.
+- All requests are **POST** (the action in the body, not the URL) for the sake of WAFs; upload has GZ enabled by default even for text, so that a WAF does not flag the PHP source as RCE.
+- The agent strictly **sanitizes paths** (no `../`, everything stays inside the root).
 
-## Limity a poznámky
+## Limits and notes
 
-- **Upload souboru většího než `post_max_size` serveru** bulk mechanismem neprojde – soubor se přeskočí s jasnou hláškou (chunked upload je možné budoucí rozšíření). Download velkých souborů funguje.
-- Přenáší se obsah a mtime; **vlastník/práva ne** (HTTP/FTP to neumí). Symlinky se nesledují.
-- Operace jsou **resumovatelné**: po předčasném pádu serveru stačí příkaz zopakovat (dokončené soubory se přeskočí, zbytek se dopočítá).
+- **Uploading a file larger than the server's `post_max_size`** cannot pass through the bulk mechanism — the file is skipped with a clear message (chunked upload is a possible future extension). Downloading large files works.
+- Content and mtime are transferred; **owner/permissions are not** (HTTP/FTP cannot do that). Symlinks are not followed.
+- Operations are **resumable**: after a premature server crash, just rerun the command (completed files are skipped, the rest is computed).
 
-## Vývoj a testování
+## Development and testing
 
-Testovací prostředí je v `docker-compose.yml` (server = PHP 7.4 Apache, klient = PHP 8.4 CLI):
+The test environment is in `docker-compose.yml` (server = PHP 7.4 Apache, client = PHP 8.4 CLI):
 
 ```bash
 docker compose up -d

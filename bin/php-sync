@@ -8,10 +8,10 @@ namespace PhpSync;
 use Symfony\Component\Console\Application;
 
 (static function (): void {
-    // Najdi autoloader – ať balíček funguje jako lokální, tak jako `composer global`.
+    // Locate the autoloader – so the package works both locally and as a `composer global` install.
     $candidates = [
-        __DIR__ . '/../vendor/autoload.php',          // lokální vývoj
-        __DIR__ . '/../../../autoload.php',            // nainstalovaný jako závislost
+        __DIR__ . '/../vendor/autoload.php',          // local development
+        __DIR__ . '/../../../autoload.php',            // installed as a dependency
     ];
     foreach ($candidates as $file) {
         if (is_file($file)) {
@@ -19,7 +19,7 @@ use Symfony\Component\Console\Application;
             return;
         }
     }
-    fwrite(STDERR, "Nenalezen Composer autoloader. Spusť `composer install`.\n");
+    fwrite(STDERR, "Composer autoloader not found. Run `composer install`.\n");
     exit(1);
 })();
 

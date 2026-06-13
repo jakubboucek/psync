@@ -10,13 +10,13 @@ use PhpSync\Transport\HttpClient;
 use RuntimeException;
 
 /**
- * Stahuje soubory ze serveru v binárních dávkách. Každá dávka je samostatný
- * request; přijaté framy se zapisují atomicky (tmp + rename) s nastavením mtime
- * zdroje. Nedokončená dávka (pád) se při dalším běhu doptá – resumovatelné.
+ * Downloads files from the server in binary batches. Each batch is a separate
+ * request; received frames are written atomically (tmp + rename) with the source
+ * mtime applied. An unfinished batch (crash) is re-requested on the next run - resumable.
  */
 final class Downloader
 {
-    /** Strop dávky dle součtu velikostí (aby request stihl server v limitu). */
+    /** Batch cap by total size (so the request stays within the server's limit). */
     private const BATCH_BYTES = 64 * 1024 * 1024;
     private const BATCH_FILES = 1000;
     private const CHUNK = 1 << 16;
@@ -73,7 +73,7 @@ final class Downloader
         try {
             $in = fopen($tmp, 'rb');
             if ($in === false) {
-                throw new RuntimeException('Nelze otevřít stažená data.');
+                throw new RuntimeException('Cannot open the downloaded data.');
             }
             while (($header = Wire::readFrameHeader($in)) !== null) {
                 $rel = $header->path;
@@ -86,16 +86,16 @@ final class Downloader
             @unlink($tmp);
         }
 
-        // Soubory, které server nevrátil (přeskočil – chyběly/nečitelné).
+        // Files the server did not return (skipped - missing/unreadable).
         foreach ($rels as $rel) {
             if (!isset($received[$rel])) {
-                $onResult($rel, false, 'server soubor nevrátil');
+                $onResult($rel, false, 'server did not return the file');
             }
         }
     }
 
     /**
-     * Zapíše jeden frame atomicky. Vrátí null při úspěchu, jinak chybu.
+     * Writes a single frame atomically. Returns null on success, otherwise an error.
      *
      * @param resource $in
      */
@@ -105,14 +105,14 @@ final class Downloader
         $dir = dirname($target);
         if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
             $this->discard($in, $header->payloadLen);
-            return 'nelze vytvořit adresář';
+            return 'cannot create directory';
         }
 
         $tmp = $target . '.phpsync.tmp';
         $out = fopen($tmp, 'wb');
         if ($out === false) {
             $this->discard($in, $header->payloadLen);
-            return 'nelze otevřít cílový temp';
+            return 'cannot open target temp file';
         }
 
         $ctx = hash_init('md5');
@@ -123,7 +123,7 @@ final class Downloader
                 fclose($out);
                 @unlink($tmp);
                 $this->discard($in, $header->payloadLen);
-                return 'nelze inicializovat dekompresi';
+                return 'cannot initialize decompression';
             }
         }
         $remaining = $header->payloadLen;
@@ -133,7 +133,7 @@ final class Downloader
             if ($chunk === false || $chunk === '') {
                 fclose($out);
                 @unlink($tmp);
-                return 'useknutý payload';
+                return 'truncated payload';
             }
             $remaining -= strlen($chunk);
             if ($inflate !== null) {
@@ -141,7 +141,7 @@ final class Downloader
                 if ($chunk === false) {
                     fclose($out);
                     @unlink($tmp);
-                    return 'chyba dekomprese';
+                    return 'decompression error';
                 }
             }
             if ($chunk !== '') {
@@ -154,7 +154,7 @@ final class Downloader
             if ($tail === false) {
                 fclose($out);
                 @unlink($tmp);
-                return 'chyba dekomprese (finish)';
+                return 'decompression error (finish)';
             }
             if ($tail !== '') {
                 hash_update($ctx, $tail);
@@ -165,11 +165,11 @@ final class Downloader
 
         if (hash_final($ctx, true) !== $header->md5) {
             @unlink($tmp);
-            return 'md5 nesouhlasí';
+            return 'md5 mismatch';
         }
         if (!@rename($tmp, $target)) {
             @unlink($tmp);
-            return 'rename selhal';
+            return 'rename failed';
         }
         @touch($target, $header->mtime);
         return null;

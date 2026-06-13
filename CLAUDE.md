@@ -1,80 +1,80 @@
-# php-sync — poznámky pro vývoj
+# php-sync — development notes
 
-rsync-podobná obousměrná synchronizace přes HTTP agenta pro legacy hostingy (jen FTP).
-Klient PHP 8.4+, agent PHP 7.4+ (bez závislostí, jen ext-sodium). Detailní uživatelská
-dokumentace je v [README.md](README.md); tady jsou věci důležité pro úpravy kódu.
+rsync-like bidirectional synchronization over an HTTP agent for legacy hostings (FTP-only).
+Client PHP 8.4+, agent PHP 7.4+ (no dependencies, just ext-sodium). Detailed user
+documentation is in [README.md](README.md); here are the things important for editing the code.
 
-## Architektura
+## Architecture
 
-- **Klient** (`src/`, namespace `PhpSync\`) – Symfony Console, instalovatelný jako `composer global`.
-- **Agent** (`agent/agent.template.php`) – šablona; `install` do ní zazdí veřejný klíč a
-  protect-list (placeholdery `PHPSYNC_PUBLICKEY_PLACEHOLDER` a `/* PHPSYNC_PROTECT */`).
-  Renderuje `PhpSync\Install\AgentBuilder`.
-- Bohatý config (mapping, ignore) je **na klientu**; agent zná jen veřejný klíč, svůj root
-  (`__DIR__`) a protect-list. Proto se `install` opakuje jen při rotaci klíče / změně protokolu.
+- **Client** (`src/`, namespace `PhpSync\`) — Symfony Console, installable as `composer global`.
+- **Agent** (`agent/agent.template.php`) — a template; `install` bakes in the public key and
+  the protect-list (placeholders `PHPSYNC_PUBLICKEY_PLACEHOLDER` and `/* PHPSYNC_PROTECT */`).
+  Rendered by `PhpSync\Install\AgentBuilder`.
+- The rich config (mapping, ignore) lives **on the client**; the agent only knows the public key, its own root
+  (`__DIR__`), and the protect-list. That is why `install` is repeated only on key rotation / protocol change.
 
-## Protokol (verze v `Protocol::VERSION`)
+## Protocol (version in `Protocol::VERSION`)
 
-- Vše **POST**, jeden endpoint. Akce v JSON těle; jen **upload** ji nese v hlavičce
-  `X-Sync-Action` (tělo je binární).
-- **Podpis Ed25519** přes kanonickou zprávu `action ⧺ ts ⧺ nonce ⧺ sha256(body)`
-  (`Signer::canonical` na klientu, ručně zrcadleno v agentovi v `authenticate()`).
-  **Když měníš tuto zprávu, uprav OBĚ strany a zvyš `Protocol::VERSION`.**
-- Endpointy: `capabilities`, `list`, `hash` (NDJSON), `download` (binární framing odpověď),
-  `upload` (binární framing tělo, NDJSON odpověď), `delete` (NDJSON).
+- Everything is **POST**, a single endpoint. The action is in the JSON body; only **upload** carries it in the
+  `X-Sync-Action` header (the body is binary).
+- **Ed25519 signature** over the canonical message `action ⧺ ts ⧺ nonce ⧺ sha256(body)`
+  (`Signer::canonical` on the client, mirrored by hand in the agent's `authenticate()`).
+  **When you change this message, update BOTH sides and bump `Protocol::VERSION`.**
+- Endpoints: `capabilities`, `list`, `hash` (NDJSON), `download` (binary framing response),
+  `upload` (binary framing body, NDJSON response), `delete` (NDJSON).
 
-### Wire formáty (drženy dvakrát — klient `Wire`/`FrameWriter`, agent inline — musí být bajt-identické!)
-- **NDJSON**: cesty jsou **base64** (názvy na legacy serverech bývají non-UTF8/Windows-1250,
-  `json_encode` by na nich selhal). Listing končí `{"end":true}`.
-- **Binární frame**: `[u32 pathLen][path][u8 flags][u64 mtime][u64 origSize][u64 payloadLen][16 md5]`,
-  big-endian (`pack N/C/J`), fixní část za cestou = **41 B**. `flags` bit0 = gzip payload.
-  Definice: `Wire::packFrameHeader/readFrameHeader`; agent `frame_pack_header/frame_read_header`.
+### Wire formats (held in two places — client `Wire`/`FrameWriter`, agent inline — must be byte-identical!)
+- **NDJSON**: paths are **base64** (names on legacy servers tend to be non-UTF8/Windows-1250,
+  and `json_encode` would fail on them). A listing ends with `{"end":true}`.
+- **Binary frame**: `[u32 pathLen][path][u8 flags][u64 mtime][u64 origSize][u64 payloadLen][16 md5]`,
+  big-endian (`pack N/C/J`), the fixed part after the path = **41 B**. `flags` bit0 = gzip payload.
+  Definitions: `Wire::packFrameHeader/readFrameHeader`; agent `frame_pack_header/frame_read_header`.
 
-## Klíčové mechanismy
+## Key mechanisms
 
-- **2-fázové porovnání** (`Comparator`): listing → kandidáti (shodná velikost, jiný mtime) →
-  md5 (lokálně + dávkově na serveru, ≤100 MB/≤1000). `--checksum` hashuje vše.
-- **StateCache** (`.php-sync-state.json` v local rootu, auto-ignorováno): klíč `base64(rel)`,
-  verdikt rovnosti se reusne jen když sedí lokální size+mtime i remote mtime. Tím se
-  nehashuje opakovaně soubor, který má jen rozdílný mtime (FTP nesedící čas).
-- **Přenosy**: per-file frame, volitelně gzip (deflate/inflate streamovaně přes temp).
-  Zápis cíle vždy **atomicky** (tmp + rename) + `touch()` mtime zdroje + ověření md5.
-- **Dávkování & limity**: klient čte `capabilities` a podle nich dávkuje. Upload je omezen
-  reálným `post_max_size` (tělo requestu) — **soubor větší než post_max_size bulk neprojde**
-  a `Uploader` ho přeskočí s hláškou (chunked upload = budoucí TODO). Download tímto omezen není.
-- **Resumabilita je primární** záruka korektnosti; NDJSON stream je jen průběžnost. Po pádu
-  serveru se příkaz zopakuje (idempotentní; hotové soubory se přeskočí).
+- **2-phase comparison** (`Comparator`): listing → candidates (identical size, different mtime) →
+  md5 (locally + in batches on the server, ≤100 MB/≤1000). `--checksum` hashes everything.
+- **StateCache** (`.php-sync-state.json` in the local root, auto-ignored): key `base64(rel)`,
+  the equality verdict is reused only when the local size+mtime and the remote mtime match. This way a
+  file that only has a differing mtime (FTP clock mismatch) is not hashed repeatedly.
+- **Transfers**: per-file frame, optionally gzip (deflate/inflate streamed through a temp file).
+  The target is always written **atomically** (tmp + rename) + `touch()` the source mtime + md5 verification.
+- **Batching & limits**: the client reads `capabilities` and batches accordingly. Upload is limited
+  by the real `post_max_size` (the request body) — **a file larger than post_max_size will not pass through bulk**
+  and `Uploader` skips it with a message (chunked upload = a future TODO). Download is not limited by this.
+- **Resumability is the primary** correctness guarantee; the NDJSON stream is only for progress. After a server
+  crash, the command is rerun (idempotent; finished files are skipped).
 
-## Pozor (proč to tak je)
+## Watch out (why it is the way it is)
 
-- **Capabilities čte původní hodnoty PŘED `prepare_runtime()`**: `set_time_limit(0)` vynuluje
-  `max_execution_time` a agent vypíná `zlib.output_compression` — proto se obě zachytávají do
-  `$CONFIG['_maxExecutionTime']` / `['_zlibOutputCompression']` na začátku. Nepřesouvej to za
-  `prepare_runtime()`, jinak capabilities lžou.
-- **zlib.output_compression** agent za běhu vypíná (`ini_set` + `no-gzip` + `Content-Encoding: identity`),
-  aby nedošlo ke dvojí kompresi. Ověřeno, že to funguje i při `zlib.output_compression=On`.
-- **Délka podpisu/klíče** se v agentovi kontroluje před `sodium_*verify` — jinak by malformed
-  podpis házel výjimku → HTTP 500 místo 403.
-- **Mazání**: `protect` filtruje klient i agent (dvě obranné linie). Protect brání **mazání**,
-  ne přepisu při download (přebývající chráněné adresáře typicky patří i do `ignore`).
-- **macOS klient neumí vytvořit non-UTF8 název** (APFS) — Windows-1250 názvy proto pokrývá jen
-  `tests/protocol_test.php` na úrovni Wire, ne integrační testy.
+- **Capabilities reads the original values BEFORE `prepare_runtime()`**: `set_time_limit(0)` zeroes out
+  `max_execution_time` and the agent disables `zlib.output_compression` — that is why both are captured into
+  `$CONFIG['_maxExecutionTime']` / `['_zlibOutputCompression']` at the start. Do not move it after
+  `prepare_runtime()`, otherwise capabilities will lie.
+- **zlib.output_compression** is disabled at runtime by the agent (`ini_set` + `no-gzip` + `Content-Encoding: identity`),
+  to avoid double compression. Verified to work even with `zlib.output_compression=On`.
+- **The signature/key length** is checked in the agent before `sodium_*verify` — otherwise a malformed
+  signature would throw an exception → HTTP 500 instead of 403.
+- **Deletion**: `protect` is filtered by both client and agent (two lines of defense). Protect prevents **deletion**,
+  not overwriting during download (extra protected directories typically belong to `ignore` as well).
+- **The macOS client cannot create a non-UTF8 name** (APFS) — so Windows-1250 names are covered only by
+  `tests/Unit/Wire.phpt` at the Wire level, not by integration tests.
 
-## Kontrola kvality a testování
+## Quality control and testing
 
-- **`composer check`** = `lint` (parallel-lint, vč. .phpt) + `phpstan` + `tester`. Pusť před commitem.
-- **PHPStan level 8 + strict-rules** na `src/` + `bin/` (`phpstan.neon`). Agent je mimo (jiná cílová
-  verze, procedurální) — kryje ho parallel-lint, lint na 7.4 a integrační testy. Level `max` se
-  nedrží záměrně: hlásil by „cast mixed" na hranicích JSON/config, kde je koerce úmyslná.
-- **Unit testy** (Nette Tester, `tests/Unit/*.phpt`): `IgnoreMatcher`, `Wire`, `Signer`, `FrameWriter`,
-  `StateCache`, `Config` — čistá logika bez sítě/IO (kromě temp souborů).
-- `php tests/agent_smoke.php render|check` — integrační test agenta (capabilities/list/hash/auth)
-  proti běžícímu serveru; vyžaduje docker compose.
-- `docker-compose.yml` — server PHP 7.4 (`jakubboucek/lamp-devstack-php:7.4-legacy`, pozn.
-  legacy verze mají suffix `-legacy`; CLI varianta `-legacy-cli`) + klient PHP 8.4.
-  Limity hostingu simuluje `tests/docker/limits.ini` (post_max_size=4M…), varianta
-  `limits-zlib.ini` testuje zlib workaround.
-- **Opcache**: po re-renderu agenta v `tests/remote` je nutný `docker compose restart server`,
-  jinak server může chvíli držet starou verzi.
-- `tests/{local*,remote}/`, `tests/*.config.php` a `tests/.smoke_priv` jsou v `.gitignore`
-  (obsahují generovaný obsah a privátní klíče).
+- **`composer check`** = `lint` (parallel-lint, incl. .phpt) + `phpstan` + `tester`. Run it before committing.
+- **PHPStan level 8 + strict-rules** on `src/` + `bin/` (`phpstan.neon`). The agent is excluded (different target
+  version, procedural) — it is covered by parallel-lint, linting on 7.4, and integration tests. Level `max` is
+  deliberately not used: it would report "cast mixed" at the JSON/config boundaries, where coercion is intentional.
+- **Unit tests** (Nette Tester, `tests/Unit/*.phpt`): `IgnoreMatcher`, `Wire`, `Signer`, `FrameWriter`,
+  `StateCache`, `Config` — pure logic without network/IO (except temp files).
+- `php tests/agent_smoke.php render|check` — an integration test of the agent (capabilities/list/hash/auth)
+  against a running server; requires docker compose.
+- `docker-compose.yml` — server PHP 7.4 (`jakubboucek/lamp-devstack-php:7.4-legacy`, note that
+  legacy versions have the suffix `-legacy`; the CLI variant is `-legacy-cli`) + client PHP 8.4.
+  Hosting limits are simulated by `tests/docker/limits.ini` (post_max_size=4M…); the variant
+  `limits-zlib.ini` tests the zlib workaround.
+- **Opcache**: after re-rendering the agent in `tests/remote`, a `docker compose restart server` is required,
+  otherwise the server may keep the old version for a while.
+- `tests/{local*,remote}/`, `tests/*.config.php`, and `tests/.smoke_priv` are in `.gitignore`
+  (they contain generated content and private keys).

@@ -7,10 +7,10 @@ namespace PhpSync\Config;
 use RuntimeException;
 
 /**
- * Klientská konfigurace projektu, načtená z PHP souboru vracejícího pole.
+ * Project client configuration, loaded from a PHP file that returns an array.
  *
- * Bohatý config (mapování local↔remote, ignore, protect) žije na klientovi;
- * server agent zná jen svůj veřejný klíč, remote root a protect-list.
+ * The rich config (local↔remote mapping, ignore, protect) lives on the client;
+ * the server agent only knows its public key, remote root and protect-list.
  */
 final class Config
 {
@@ -49,34 +49,34 @@ final class Config
     }
 
     /**
-     * Načte a zvaliduje config z PHP souboru (`return [...]`).
+     * Loads and validates the config from a PHP file (`return [...]`).
      */
     public static function load(string $path): self
     {
         if (!is_file($path)) {
-            throw new RuntimeException("Konfigurační soubor neexistuje: $path");
+            throw new RuntimeException("Configuration file does not exist: $path");
         }
 
         $data = require $path;
         if (!is_array($data)) {
-            throw new RuntimeException("Konfigurační soubor musí vracet pole (`return [...]`): $path");
+            throw new RuntimeException("Configuration file must return an array (`return [...]`): $path");
         }
 
         $require = static function (string $key) use ($data, $path): mixed {
             if (!array_key_exists($key, $data) || $data[$key] === null || $data[$key] === '') {
-                throw new RuntimeException("V configu chybí povinný klíč '$key': $path");
+                throw new RuntimeException("Required config key '$key' is missing: $path");
             }
             return $data[$key];
         };
 
         $mapping = $data['mapping'] ?? [];
         if (!is_array($mapping) || !isset($mapping['local'])) {
-            throw new RuntimeException("Klíč 'mapping.local' je povinný: $path");
+            throw new RuntimeException("The 'mapping.local' key is required: $path");
         }
 
         $local = self::normalizeDir((string) $mapping['local']);
         if (!is_dir($local)) {
-            throw new RuntimeException("mapping.local neexistuje nebo není adresář: $local");
+            throw new RuntimeException("mapping.local does not exist or is not a directory: $local");
         }
 
         return new self(
@@ -95,13 +95,13 @@ final class Config
     }
 
     /**
-     * Privátní klíč je nutný pro každou operaci kromě `install`.
+     * The private key is required for every operation except `install`.
      */
     public function requirePrivateKey(): string
     {
         if ($this->privateKey === null) {
             throw new RuntimeException(
-                "V configu chybí 'privateKey'. Vygeneruj ho příkazem `install` a vlož do configu.",
+                "The 'privateKey' is missing from the config. Generate it with the `install` command and add it to the config.",
             );
         }
         return $this->privateKey;
@@ -113,7 +113,7 @@ final class Config
         return $real !== false ? $real : rtrim($dir, '/');
     }
 
-    /** Remote root je vždy „/“-prefixovaná cesta bez koncového lomítka (kromě rootu). */
+    /** The remote root is always a "/"-prefixed path without a trailing slash (except for the root). */
     private static function normalizeRemote(string $remote): string
     {
         $remote = '/' . trim($remote, '/');

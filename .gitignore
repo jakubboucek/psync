@@ -1,16 +1,16 @@
 /vendor/
 /composer.lock
 
-# Test prostředí – generovaný obsah, nikdy necommitovat
+# Test environment – generated content, never commit
 /tests/local*/
 /tests/remote/
 /tests/*.config.php
 /tests/.smoke_priv
 
-# Nette Tester výstup u failnutých testů
+# Nette Tester output for failed tests
 /tests/Unit/output/
 
-# Vygenerovaný agent a config s privátním klíčem
+# Generated agent and config with the private key
 agent.php
 *.private.php
 php-sync.php

@@ -5,17 +5,17 @@ declare(strict_types=1);
 namespace PhpSync\Sync;
 
 /**
- * Výsledek porovnání local↔remote. Neutrální vůči směru – upload/download
- * si z kategorií vyberou, co přenést a co (volitelně) smazat.
+ * Result of a local↔remote comparison. Direction-neutral - upload/download
+ * pick from the categories what to transfer and what to (optionally) delete.
  */
 final class Comparison
 {
     /**
-     * @param array<string, FileEntry> $localOnly  jen lokálně (rel => entry)
-     * @param array<string, FileEntry> $remoteOnly jen na serveru
-     * @param array<string, array{local: FileEntry, remote: FileEntry}> $modified liší se obsahem
-     * @param list<string> $equal shodné
-     * @param int $hashedCount kolik souborů se reálně hashovalo (diagnostika)
+     * @param array<string, FileEntry> $localOnly  local only (rel => entry)
+     * @param array<string, FileEntry> $remoteOnly remote only
+     * @param array<string, array{local: FileEntry, remote: FileEntry}> $modified content differs
+     * @param list<string> $equal identical
+     * @param int $hashedCount how many files were actually hashed (diagnostics)
      */
     public function __construct(
         public readonly array $localOnly,

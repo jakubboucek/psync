@@ -12,8 +12,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * `download` – stáhne ze serveru soubory, které lokálně chybí nebo se liší (remote → local).
- * S --delete navíc smaže soubory přebývající lokálně (mimo protect-list).
+ * `download` – downloads from the server the files that are missing locally or differ (remote → local).
+ * With --delete it additionally deletes files that are extra locally (outside the protect-list).
  */
 final class DownloadCommand extends AbstractSyncCommand
 {
@@ -22,9 +22,9 @@ final class DownloadCommand extends AbstractSyncCommand
         parent::configure();
         $this
             ->setName('download')
-            ->setDescription('Stáhne rozdílné soubory ze serveru (remote → local).')
-            ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Jen vypiš, co by se přeneslo/smazalo.')
-            ->addOption('delete', null, InputOption::VALUE_NONE, 'Smaž lokálně soubory přebývající oproti serveru.');
+            ->setDescription('Downloads the differing files from the server (remote → local).')
+            ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Only print what would be transferred/deleted.')
+            ->addOption('delete', null, InputOption::VALUE_NONE, 'Delete local files that are extra compared to the server.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -36,7 +36,7 @@ final class DownloadCommand extends AbstractSyncCommand
 
         $comparison = $this->buildComparator($config, $input, $http)->compare($this->scope($input));
 
-        // remote → local: chybějící lokálně + obsahově odlišné
+        // remote → local: missing locally + differing in content
         $files = $comparison->remoteOnly;
         foreach ($comparison->modified as $rel => $pair) {
             $files[$rel] = $pair['remote'];
@@ -57,9 +57,9 @@ final class DownloadCommand extends AbstractSyncCommand
         }
 
         if ($files === [] && $toDelete === []) {
-            $io->success('Není co stahovat – lokální kopie je v synchronizaci.');
+            $io->success('Nothing to download – the local copy is in sync.');
             if ($protectedCount > 0) {
-                $io->note("$protectedCount lokálních souborů přebývá, ale je chráněno protect-listem.");
+                $io->note("$protectedCount local files are extra but protected by the protect-list.");
             }
             return Command::SUCCESS;
         }
@@ -71,7 +71,7 @@ final class DownloadCommand extends AbstractSyncCommand
             foreach ($toDelete as $rel) {
                 $output->writeln("<fg=red>␡ $rel</>");
             }
-            $io->note(sprintf('dry-run: %d stáhnout, %d smazat lokálně.', count($files), count($toDelete)));
+            $io->note(sprintf('dry run: %d to download, %d to delete locally.', count($files), count($toDelete)));
             return Command::SUCCESS;
         }
 
@@ -96,14 +96,14 @@ final class DownloadCommand extends AbstractSyncCommand
                 $output->writeln("<fg=red>␡ $rel</>");
             } else {
                 $fail++;
-                $output->writeln("<fg=red>✗ smazání $rel</>");
+                $output->writeln("<fg=red>✗ delete $rel</>");
             }
         }
 
         $io->newLine();
-        $io->writeln(sprintf('<info>Staženo %d, smazáno %d, chyb %d.</info>', $ok, $deleted, $fail));
+        $io->writeln(sprintf('<info>Downloaded %d, deleted %d, errors %d.</info>', $ok, $deleted, $fail));
         if ($protectedCount > 0) {
-            $io->note("$protectedCount přebývajících souborů ponecháno (protect-list).");
+            $io->note("$protectedCount extra files kept (protect-list).");
         }
         return $fail === 0 ? Command::SUCCESS : Command::FAILURE;
     }

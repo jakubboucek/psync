@@ -8,7 +8,7 @@ use Tester\Assert;
 require __DIR__ . '/../bootstrap.php';
 
 
-/** Zapíše dočasný config (PHP vracející pole) a vrátí cestu. */
+/** Writes a temporary config (PHP returning an array) and returns the path. */
 function writeConfig(array $data): string
 {
     $path = tempnam(sys_get_temp_dir(), 'phpsync_cfg_') . '.php';
@@ -17,11 +17,11 @@ function writeConfig(array $data): string
 }
 
 
-test('validní config se načte a znormalizuje', function () {
+test('a valid config is loaded and normalized', function () {
     $local = sys_get_temp_dir();
     $path = writeConfig([
         'url' => 'https://example.com/agent.php',
-        'privateKey' => 'klic',
+        'privateKey' => 'key',
         'mapping' => ['local' => $local, 'remote' => '/web/'],
         'ignore' => ['/.git', '*.log'],
         'protect' => ['/uploads'],
@@ -30,17 +30,17 @@ test('validní config se načte a znormalizuje', function () {
 
     $config = Config::load($path);
     Assert::same('https://example.com/agent.php', $config->url);
-    Assert::same('klic', $config->requirePrivateKey());
+    Assert::same('key', $config->requirePrivateKey());
     Assert::same(realpath($local), $config->localRoot);
-    Assert::same('/web', $config->remoteRoot);              // koncové lomítko pryč
+    Assert::same('/web', $config->remoteRoot);              // trailing slash removed
     Assert::same(['/.git', '*.log'], $config->ignore);
-    Assert::same(['jpg', 'png'], $config->compressSkipExt); // lowercase, bez tečky
+    Assert::same(['jpg', 'png'], $config->compressSkipExt); // lowercase, without the dot
 
     @unlink($path);
 });
 
 
-test('chybějící privateKey – requirePrivateKey vyhodí výjimku', function () {
+test('missing privateKey – requirePrivateKey throws an exception', function () {
     $path = writeConfig([
         'url' => 'https://example.com/agent.php',
         'mapping' => ['local' => sys_get_temp_dir()],
@@ -52,23 +52,23 @@ test('chybějící privateKey – requirePrivateKey vyhodí výjimku', function 
 });
 
 
-test('chybějící url vyhodí výjimku', function () {
+test('missing url throws an exception', function () {
     $path = writeConfig(['mapping' => ['local' => sys_get_temp_dir()]]);
     Assert::exception(fn() => Config::load($path), RuntimeException::class, "%a%'url'%a%");
     @unlink($path);
 });
 
 
-test('chybějící mapping.local vyhodí výjimku', function () {
+test('missing mapping.local throws an exception', function () {
     $path = writeConfig(['url' => 'https://example.com/agent.php']);
     Assert::exception(fn() => Config::load($path), RuntimeException::class, '%a%mapping.local%a%');
     @unlink($path);
 });
 
 
-test('config, který nevrací pole, vyhodí výjimku', function () {
+test('a config that does not return an array throws an exception', function () {
     $path = tempnam(sys_get_temp_dir(), 'phpsync_cfg_') . '.php';
-    file_put_contents($path, '<?php return "ne-pole";');
-    Assert::exception(fn() => Config::load($path), RuntimeException::class, '%a%musí vracet pole%a%');
+    file_put_contents($path, '<?php return "not-an-array";');
+    Assert::exception(fn() => Config::load($path), RuntimeException::class, '%a%must return an array%a%');
     @unlink($path);
 });

@@ -9,16 +9,16 @@ use PhpSync\Protocol\Wire;
 use PhpSync\Transport\HttpClient;
 
 /**
- * Nahrává soubory na server v binárních dávkách (frames). Velikost dávky je
- * omezena reálným post_max_size serveru (z capabilities) – tělo requestu se
- * přes něj nesmí dostat. Každá dávka je samostatný request → resumovatelné.
+ * Uploads files to the server in binary batches (frames). The batch size is
+ * limited by the server's actual post_max_size (from capabilities) - the request
+ * body must not exceed it. Each batch is a separate request → resumable.
  */
 final class Uploader
 {
-    /** Rezerva pod post_max_size na hlavičky apod. */
+    /** Reserve below post_max_size for headers etc. */
     private const MARGIN = 16 * 1024;
 
-    /** Fallback, když server hlásí neomezené post_max_size (0). */
+    /** Fallback when the server reports an unlimited post_max_size (0). */
     private const DEFAULT_LIMIT = 64 * 1024 * 1024;
 
     private int $limit;
@@ -39,7 +39,7 @@ final class Uploader
     }
 
     /**
-     * @param array<string, FileEntry> $files rel => entry (lokální)
+     * @param array<string, FileEntry> $files rel => entry (local)
      * @param callable(string $rel, bool $ok, ?string $err): void $onResult
      */
     public function upload(array $files, callable $onResult): void
@@ -51,7 +51,7 @@ final class Uploader
         foreach ($files as $rel => $entry) {
             $abs = $this->localRoot . '/' . $rel;
             if (!is_file($abs)) {
-                $onResult($rel, false, 'lokální soubor zmizel');
+                $onResult($rel, false, 'local file disappeared');
                 continue;
             }
             $gz = $this->compress && !$this->skipped($rel);
@@ -60,7 +60,7 @@ final class Uploader
             if ($frame['size'] > $this->limit) {
                 @unlink($frame['tmp']);
                 $onResult($rel, false, sprintf(
-                    'soubor je větší než post_max_size serveru (%s > %s) – bulk upload ho nepřenese',
+                    'file is larger than the server post_max_size (%s > %s) - bulk upload cannot transfer it',
                     $this->human($frame['size']),
                     $this->human($this->limit),
                 ));
@@ -86,7 +86,7 @@ final class Uploader
         if ($batch === []) {
             return;
         }
-        // Tělo dávky je ≤ post_max_size (malé), složíme ho do stringu.
+        // The batch body is ≤ post_max_size (small), assemble it into a string.
         $body = '';
         foreach ($batch as $item) {
             $body .= (string) file_get_contents($item['tmp']);
@@ -103,7 +103,7 @@ final class Uploader
         foreach ($batch as $item) {
             $r = $results[$item['rel']] ?? null;
             if ($r === null) {
-                $onResult($item['rel'], false, 'server nevrátil výsledek');
+                $onResult($item['rel'], false, 'server returned no result');
             } else {
                 $onResult($item['rel'], (bool) ($r['ok'] ?? false), isset($r['err']) ? (string) $r['err'] : null);
             }

@@ -10,16 +10,16 @@ use PhpSync\State\StateCache;
 use PhpSync\Transport\HttpClient;
 
 /**
- * Jádro 2-fázového porovnání:
- *  1) rychlý listing (size + mtime) na obou stranách
- *  2) pro size-shodné/mtime-rozdílné kandidáty md5 (lokálně + dávkovaně na serveru)
+ * Core of the 2-phase comparison:
+ *  1) fast listing (size + mtime) on both sides
+ *  2) md5 for size-identical/mtime-differing candidates (locally + batched on the server)
  *
- * State-cache umožňuje přeskočit hashování souborů, jejichž metadata se od
- * minulého ověření nezměnila. Režim --checksum cache i mtime ignoruje.
+ * The state cache allows skipping the hashing of files whose metadata has not
+ * changed since the last check. The --checksum mode ignores both the cache and mtime.
  */
 final class Comparator
 {
-    /** Strop dávky pro server hash: součet velikostí (100 MB) a počet souborů. */
+    /** Batch cap for server hashing: total size (100 MB) and file count. */
     private const HASH_BATCH_BYTES = 100 * 1024 * 1024;
     private const HASH_BATCH_FILES = 1000;
 
@@ -59,7 +59,7 @@ final class Comparator
                 $equal[] = $rel;
                 continue;
             }
-            // size shodný + mtime rozdílný (nebo --checksum) → kandidát na hash
+            // identical size + differing mtime (or --checksum) → hash candidate
             $candidates[$rel] = ['local' => $l, 'remote' => $r];
         }
         foreach ($remote as $rel => $r) {
@@ -80,11 +80,11 @@ final class Comparator
     }
 
     /**
-     * Rozhodne kandidáty přes md5. Vrátí počet reálně přehashovaných souborů.
+     * Resolves candidates via md5. Returns the number of files actually rehashed.
      *
      * @param array<string, array{local: FileEntry, remote: FileEntry}> $candidates
-     * @param array<string, array{local: FileEntry, remote: FileEntry}> $modified  (ref – doplní se)
-     * @param list<string> $equal (ref – doplní se)
+     * @param array<string, array{local: FileEntry, remote: FileEntry}> $modified  (ref - appended to)
+     * @param list<string> $equal (ref - appended to)
      */
     private function resolveCandidates(array $candidates, array &$modified, array &$equal): int
     {
@@ -92,7 +92,7 @@ final class Comparator
             return 0;
         }
 
-        // 1) Zkus cache (mimo --checksum).
+        // 1) Try the cache (except in --checksum mode).
         $needHash = [];
         foreach ($candidates as $rel => $pair) {
             if (!$this->checksum) {
@@ -108,7 +108,7 @@ final class Comparator
             return 0;
         }
 
-        // 2) Remote md5 dávkově, lokální md5 lokálně.
+        // 2) Remote md5 in batches, local md5 locally.
         $remoteHashes = $this->remoteHashes($needHash);
 
         foreach ($needHash as $rel => $pair) {
@@ -129,7 +129,7 @@ final class Comparator
     }
 
     /**
-     * Spočítá remote md5 pro kandidáty, dávkováno dle limitu velikosti/počtu.
+     * Computes remote md5 for candidates, batched by the size/count limit.
      *
      * @param array<string, array{local: FileEntry, remote: FileEntry}> $candidates
      * @return array<string, string> rel => md5

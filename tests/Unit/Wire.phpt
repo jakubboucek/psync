@@ -10,8 +10,8 @@ use Tester\Assert;
 require __DIR__ . '/../bootstrap.php';
 
 
-test('NDJSON roundtrip s base64 cestou (i non-UTF8)', function () {
-    $weird = "soubor-\x9a\x9d.txt"; // Windows-1250, neplatné UTF-8
+test('NDJSON round-trip with base64 path (incl. non-UTF8)', function () {
+    $weird = "soubor-\x9a\x9d.txt"; // Windows-1250, invalid UTF-8
     $line = Wire::ndjson(['p' => Wire::encPath($weird), 's' => 42, 'm' => 7]);
     Assert::same("\n", substr($line, -1));
 
@@ -22,7 +22,7 @@ test('NDJSON roundtrip s base64 cestou (i non-UTF8)', function () {
 });
 
 
-test('decPath odmítne neplatné base64', function () {
+test('decPath rejects invalid base64', function () {
     Assert::exception(
         fn() => Wire::decPath('!!!neplatne!!!'),
         RuntimeException::class,
@@ -30,7 +30,7 @@ test('decPath odmítne neplatné base64', function () {
 });
 
 
-test('binární frame – pack/read roundtrip více framů + EOF', function () {
+test('binary frame – pack/read round-trip of multiple frames + EOF', function () {
     $payload = random_bytes(3000);
     $h1 = new FrameHeader('a/b.txt', Protocol::FLAG_GZIP, 1700000000, 9999, strlen($payload), md5($payload, true));
     $h2 = new FrameHeader('c.bin', 0, 1, 2, 3, md5('xyz', true));
@@ -61,20 +61,20 @@ test('binární frame – pack/read roundtrip více framů + EOF', function () {
 });
 
 
-test('readExact vyhodí výjimku při useknutí', function () {
+test('readExact throws an exception on truncation', function () {
     $stream = fopen('php://temp', 'r+b');
     fwrite($stream, 'abc');
     rewind($stream);
     Assert::exception(
         fn() => Wire::readExact($stream, 10),
         RuntimeException::class,
-        '%a%očekáváno 10%a%',
+        '%a%expected 10%a%',
     );
     fclose($stream);
 });
 
 
-test('tryReadExact vrátí null na čistém EOF', function () {
+test('tryReadExact returns null on clean EOF', function () {
     $stream = fopen('php://temp', 'r+b');
     Assert::null(Wire::tryReadExact($stream, 4));
     fclose($stream);

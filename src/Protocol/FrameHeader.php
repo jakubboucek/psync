@@ -5,17 +5,17 @@ declare(strict_types=1);
 namespace PhpSync\Protocol;
 
 /**
- * Hlavička jednoho souboru v binárním framu (download/upload).
+ * Header of a single file in a binary frame (download/upload).
  */
 final class FrameHeader
 {
     public function __construct(
-        public readonly string $path,      // relativní cesta (raw bajty, může být non-UTF8)
-        public readonly int $flags,        // bitová maska, viz Protocol::FLAG_*
-        public readonly int $mtime,        // mtime zdroje (unix)
-        public readonly int $origSize,     // velikost původního (dekomprimovaného) obsahu
-        public readonly int $payloadLen,   // délka payloadu na wire (po případné kompresi)
-        public readonly string $md5,       // raw md5 (16 B) původního obsahu
+        public readonly string $path,      // relative path (raw bytes, may be non-UTF8)
+        public readonly int $flags,        // bit mask, see Protocol::FLAG_*
+        public readonly int $mtime,        // source mtime (unix)
+        public readonly int $origSize,     // size of the original (decompressed) content
+        public readonly int $payloadLen,   // payload length on the wire (after optional compression)
+        public readonly string $md5,       // raw md5 (16 B) of the original content
     ) {
     }
 

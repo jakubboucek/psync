@@ -10,8 +10,8 @@ use PhpSync\Protocol\Wire;
 use RuntimeException;
 
 /**
- * HTTP transport ke server agentovi. Podepisuje requesty a streamuje NDJSON
- * odpovědi po řádcích (paměťově nenáročné, odolné vůči předčasnému pádu).
+ * HTTP transport to the server agent. Signs requests and streams NDJSON
+ * responses line by line (memory-friendly, resilient to a premature crash).
  */
 final class HttpClient
 {
@@ -24,7 +24,8 @@ final class HttpClient
     }
 
     /**
-     * Načte capabilities a zároveň synchronizuje čas se serverem (kvůli skew).
+     * Loads capabilities and at the same time synchronizes the clock with the
+     * server (to account for skew).
      *
      * @return array<string, mixed>
      */
@@ -33,14 +34,14 @@ final class HttpClient
         $lines = $this->postJson(Protocol::ACTION_CAPABILITIES, []);
         $caps = $lines[0] ?? null;
         if (!is_array($caps) || !isset($caps['serverTime'])) {
-            throw new RuntimeException('Neplatná odpověď capabilities.');
+            throw new RuntimeException('Invalid capabilities response.');
         }
         $this->timeOffset = (int) $caps['serverTime'] - time();
         return $caps;
     }
 
     /**
-     * Pošle podepsaný JSON request a vrátí dekódované NDJSON řádky.
+     * Sends a signed JSON request and returns the decoded NDJSON lines.
      *
      * @param array<string, mixed> $payload
      * @return list<array<string, mixed>>
@@ -55,9 +56,9 @@ final class HttpClient
     }
 
     /**
-     * Pošle podepsaný JSON request a streamuje NDJSON řádky do callbacku.
-     * Callback dostává dekódovaný objekt každého řádku. Řádky {"error":...}
-     * i nenulový HTTP kód vyhodí výjimku.
+     * Sends a signed JSON request and streams NDJSON lines to the callback.
+     * The callback receives the decoded object of each line. An {"error":...}
+     * line or a non-zero HTTP code throws an exception.
      *
      * @param array<string, mixed> $payload
      * @param callable(array<string,mixed>):void $onLine
@@ -66,7 +67,7 @@ final class HttpClient
     {
         $body = json_encode(['action' => $action] + $payload, JSON_UNESCAPED_SLASHES);
         if ($body === false) {
-            throw new RuntimeException('Nelze zakódovat request.');
+            throw new RuntimeException('Cannot encode the request.');
         }
         $headers = $this->signedHeaders($action, $body);
         $headers[] = 'Content-Type: application/json';
@@ -81,14 +82,14 @@ final class HttpClient
         });
 
         if ($error !== null) {
-            throw new RuntimeException("Agent vrátil chybu: $error");
+            throw new RuntimeException("Agent returned an error: $error");
         }
     }
 
     /**
-     * Stáhne binární odpověď (download) do dočasného souboru a vrátí jeho cestu.
-     * Volající je zodpovědný za smazání. Při HTTP chybě přečte tělo jako NDJSON
-     * a vyhodí výjimku.
+     * Downloads a binary response (download) into a temporary file and returns
+     * its path. The caller is responsible for deleting it. On an HTTP error it
+     * reads the body as NDJSON and throws an exception.
      *
      * @param array<string, mixed> $payload
      */
@@ -96,18 +97,18 @@ final class HttpClient
     {
         $body = json_encode(['action' => Protocol::ACTION_DOWNLOAD] + $payload, JSON_UNESCAPED_SLASHES);
         if ($body === false) {
-            throw new RuntimeException('Nelze zakódovat download request.');
+            throw new RuntimeException('Cannot encode the download request.');
         }
         $headers = $this->signedHeaders(Protocol::ACTION_DOWNLOAD, $body);
         $headers[] = 'Content-Type: application/json';
 
         $tmp = tempnam(sys_get_temp_dir(), 'phpsync_dl_');
         if ($tmp === false) {
-            throw new RuntimeException('Nelze vytvořit dočasný soubor.');
+            throw new RuntimeException('Cannot create a temporary file.');
         }
         $fh = fopen($tmp, 'wb');
         if ($fh === false) {
-            throw new RuntimeException('Nelze otevřít dočasný soubor.');
+            throw new RuntimeException('Cannot open the temporary file.');
         }
 
         $ch = curl_init($this->url);
@@ -125,7 +126,7 @@ final class HttpClient
 
         if ($ok === false) {
             @unlink($tmp);
-            throw new RuntimeException("Spojení selhalo: $curlErr");
+            throw new RuntimeException("Connection failed: $curlErr");
         }
         if ($code >= 400) {
             $head = (string) file_get_contents($tmp, false, null, 0, 4096);
@@ -136,13 +137,13 @@ final class HttpClient
             if (is_array($obj) && isset($obj['error'])) {
                 $msg = (string) $obj['error'];
             }
-            throw new RuntimeException("Agent odpověděl HTTP $code: $msg");
+            throw new RuntimeException("Agent responded with HTTP $code: $msg");
         }
         return $tmp;
     }
 
     /**
-     * Pošle binární tělo uploadu (X-Sync-Action: upload), streamuje NDJSON výsledky.
+     * Sends the binary upload body (X-Sync-Action: upload) and streams NDJSON results.
      *
      * @param callable(array<string,mixed>):void $onLine
      */
@@ -161,12 +162,12 @@ final class HttpClient
             $onLine($obj);
         });
         if ($error !== null) {
-            throw new RuntimeException("Agent vrátil chybu: $error");
+            throw new RuntimeException("Agent returned an error: $error");
         }
     }
 
     /**
-     * @param string|resource $body  tělo (string pro JSON, resource pro binární upload)
+     * @param string|resource $body  the body (string for JSON, resource for a binary upload)
      * @param list<string> $headers
      * @param callable(array<string,mixed>):void $onLine
      */
@@ -203,13 +204,13 @@ final class HttpClient
         curl_close($ch);
 
         if ($buffer !== '') {
-            $deliver($buffer); // poslední řádek bez koncového \n
+            $deliver($buffer); // last line without a trailing \n
         }
         if ($ok === false) {
-            throw new RuntimeException("Spojení selhalo: $curlErr");
+            throw new RuntimeException("Connection failed: $curlErr");
         }
         if ($code >= 400) {
-            throw new RuntimeException("Agent odpověděl HTTP $code.");
+            throw new RuntimeException("Agent responded with HTTP $code.");
         }
     }
 

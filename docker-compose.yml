@@ -1,13 +1,13 @@
-# Opakovatelné testovací prostředí pro php-sync.
+# Repeatable test environment for php-sync.
 #
-#   server – "remote": agent přes HTTP na reálném PHP 7.4 + Apache (legacy hosting)
-#   client – PHP 8.4 CLI, odsud se volá `php-sync`
+#   server – "remote": agent over HTTP on real PHP 7.4 + Apache (legacy hosting)
+#   client – PHP 8.4 CLI, `php-sync` is called from here
 #
-# Použití:
+# Usage:
 #   docker compose up -d
-#   docker compose exec client php bin/php-sync <příkaz>
+#   docker compose exec client php bin/php-sync <command>
 #
-# Limity sdíleného hostingu simuluje mountovaný php.ini (tests/docker/limits.ini).
+# Shared hosting limits are simulated by a mounted php.ini (tests/docker/limits.ini).
 
 services:
   server:
@@ -28,7 +28,7 @@ services:
       - server
     environment:
       TZ: Europe/Prague
-      # Uvnitř compose sítě je server dostupný na hostname `server`.
+      # Inside the compose network the server is reachable at hostname `server`.
       PHPSYNC_AGENT_URL: http://server/agent.php
     volumes:
       - .:/app

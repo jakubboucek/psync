@@ -9,7 +9,7 @@ use Tester\Assert;
 require __DIR__ . '/../bootstrap.php';
 
 
-test('vygenerovaný pár podepíše a ověří', function () {
+test('generated pair signs and verifies', function () {
     $pair = Signer::generateKeyPair();
     $signer = new Signer($pair['private']);
     $body = '{"action":"list"}';
@@ -22,7 +22,7 @@ test('vygenerovaný pár podepíše a ověří', function () {
 });
 
 
-test('kanonická zpráva je deterministická', function () {
+test('canonical message is deterministic', function () {
     Assert::same(
         Signer::canonical('list', 100, 'n', 'body'),
         Signer::canonical('list', 100, 'n', 'body'),
@@ -34,7 +34,7 @@ test('kanonická zpráva je deterministická', function () {
 });
 
 
-test('změna těla, akce nebo nonce shodí ověření', function () {
+test('changing the body, action or nonce breaks verification', function () {
     $pair = Signer::generateKeyPair();
     $signer = new Signer($pair['private']);
     $body = '{"action":"list"}';
@@ -42,23 +42,23 @@ test('změna těla, akce nebo nonce shodí ověření', function () {
 
     Assert::false(Signer::verify($pair['public'], 'list', 100, 'n', $body . 'x', $sig));
     Assert::false(Signer::verify($pair['public'], 'delete', 100, 'n', $body, $sig));
-    Assert::false(Signer::verify($pair['public'], 'list', 100, 'jiny-nonce', $body, $sig));
+    Assert::false(Signer::verify($pair['public'], 'list', 100, 'other-nonce', $body, $sig));
     Assert::false(Signer::verify($pair['public'], 'list', 101, 'n', $body, $sig));
 });
 
 
-test('cizí veřejný klíč i malformovaný podpis selžou', function () {
+test('foreign public key and malformed signature both fail', function () {
     $pair = Signer::generateKeyPair();
     $other = Signer::generateKeyPair();
     $signer = new Signer($pair['private']);
     $sig = $signer->headers('list', 'b', 1, 'n')[Protocol::HEADER_SIG];
 
     Assert::false(Signer::verify($other['public'], 'list', 1, 'n', 'b', $sig));
-    Assert::false(Signer::verify($pair['public'], 'list', 1, 'n', 'b', 'AAAA')); // krátký podpis
-    Assert::false(Signer::verify('!!!', 'list', 1, 'n', 'b', $sig));             // neplatný klíč
+    Assert::false(Signer::verify($pair['public'], 'list', 1, 'n', 'b', 'AAAA')); // short signature
+    Assert::false(Signer::verify('!!!', 'list', 1, 'n', 'b', $sig));             // invalid key
 });
 
 
-testException('neplatný privátní klíč v konstruktoru', function () {
-    new Signer('tohle-neni-klic');
+testException('invalid private key in constructor', function () {
+    new Signer('this-is-not-a-key');
 }, RuntimeException::class);

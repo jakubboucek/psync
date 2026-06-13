@@ -17,11 +17,11 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 
 /**
- * Společný základ příkazů pracujících s configem a relativní cestou (scope).
+ * Shared base for commands that work with the config and a relative path (scope).
  */
 abstract class AbstractSyncCommand extends Command
 {
-    /** Lokální stavová cache – nikdy se nesynchronizuje. */
+    /** Local state cache – never synchronized. */
     private const STATE_FILE = '.php-sync-state.json';
 
     protected function configure(): void
@@ -30,21 +30,21 @@ abstract class AbstractSyncCommand extends Command
             ->addArgument(
                 'path',
                 InputArgument::OPTIONAL,
-                'Relativní cesta (soubor/podadresář), na kterou se operace omezí.',
+                'Relative path (file/subdirectory) to limit the operation to.',
                 '',
             )
             ->addOption(
                 'config',
                 'c',
                 InputOption::VALUE_REQUIRED,
-                'Cesta ke konfiguračnímu souboru.',
+                'Path to the configuration file.',
                 'php-sync.php',
             )
             ->addOption(
                 'checksum',
                 null,
                 InputOption::VALUE_NONE,
-                'Vždy počítej hash (ignoruj mtime i cache), jako rsync -c.',
+                'Always compute the hash (ignore mtime and cache), like rsync -c.',
             );
     }
 
@@ -53,7 +53,7 @@ abstract class AbstractSyncCommand extends Command
         return Config::load((string) $input->getOption('config'));
     }
 
-    /** Normalizovaná relativní cesta scope (bez vodicích/koncových lomítek), '' = celý strom. */
+    /** Normalized relative scope path (without leading/trailing slashes), '' = the whole tree. */
     protected function scope(InputInterface $input): string
     {
         return trim((string) $input->getArgument('path'), '/');
@@ -65,7 +65,7 @@ abstract class AbstractSyncCommand extends Command
     }
 
     /**
-     * Sestaví ignore matcher a navíc nikdy nesynchronizuje stavovou cache.
+     * Builds the ignore matcher and additionally never synchronizes the state cache.
      */
     protected function buildIgnore(Config $config): IgnoreMatcher
     {
@@ -75,7 +75,7 @@ abstract class AbstractSyncCommand extends Command
     }
 
     /**
-     * Protect matcher – soubory, které se nikdy nemažou (druhá linie je v agentovi).
+     * Protect matcher – files that are never deleted (the second line of defense is in the agent).
      */
     protected function buildProtect(Config $config): IgnoreMatcher
     {

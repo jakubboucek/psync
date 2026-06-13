@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace PhpSync\Sync;
 
 /**
- * Lokální rekurzivní průchod souborů – zrcadlí chování agenta (deterministicky,
- * nesleduje symlinky), navíc aplikuje ignore vzory.
+ * Local recursive file traversal - mirrors the agent's behavior (deterministic,
+ * does not follow symlinks), and additionally applies ignore patterns.
  */
 final class Walker
 {

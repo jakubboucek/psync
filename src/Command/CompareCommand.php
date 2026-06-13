@@ -12,13 +12,13 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * `compare` – 2-fázové porovnání local↔remote, výpis rozdílů (nic nepřenáší).
+ * `compare` – 2-phase local↔remote comparison, prints the differences (transfers nothing).
  *
- * Legenda:
- *   >  jen lokálně (na serveru chybí)
- *   <  jen na serveru (lokálně chybí)
- *   M  liší se obsahem
- *   =  shodné (jen s -v)
+ * Legend:
+ *   >  local only (missing on the server)
+ *   <  server only (missing locally)
+ *   M  differs in content
+ *   =  identical (only with -v)
  */
 final class CompareCommand extends AbstractSyncCommand
 {
@@ -27,7 +27,7 @@ final class CompareCommand extends AbstractSyncCommand
         parent::configure();
         $this
             ->setName('compare')
-            ->setDescription('Porovná lokální a vzdálené soubory a vypíše rozdíly.');
+            ->setDescription('Compares local and remote files and prints the differences.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -39,7 +39,7 @@ final class CompareCommand extends AbstractSyncCommand
         $caps = $http->capabilities();
         if (($caps['protocolVersion'] ?? null) !== Protocol::VERSION) {
             $io->warning(sprintf(
-                'Verze protokolu se liší (server %s, klient %d). Přegeneruj agenta příkazem install.',
+                'Protocol version mismatch (server %s, client %d). Regenerate the agent with the install command.',
                 (string) ($caps['protocolVersion'] ?? '?'),
                 Protocol::VERSION,
             ));
@@ -77,11 +77,11 @@ final class CompareCommand extends AbstractSyncCommand
 
         $io->newLine();
         if ($c->isInSync()) {
-            $io->success('V synchronizaci – žádné rozdíly.');
+            $io->success('In sync – no differences.');
             return;
         }
         $io->writeln(sprintf(
-            '<info>Rozdíly:</info> M %d, > %d (jen lokálně), < %d (jen na serveru), = %d shodných, hashováno %d.',
+            '<info>Differences:</info> M %d, > %d (local only), < %d (server only), = %d identical, hashed %d.',
             count($c->modified),
             count($c->localOnly),
             count($c->remoteOnly),

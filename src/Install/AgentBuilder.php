@@ -7,7 +7,7 @@ namespace PhpSync\Install;
 use RuntimeException;
 
 /**
- * Vyrenderuje serverového agenta ze šablony – doplní veřejný klíč a protect-list.
+ * Renders the server agent from a template – fills in the public key and protect-list.
  */
 final class AgentBuilder
 {
@@ -25,11 +25,11 @@ final class AgentBuilder
     {
         $tpl = @file_get_contents($this->templatePath);
         if ($tpl === false) {
-            throw new RuntimeException("Nelze načíst šablonu agenta: {$this->templatePath}");
+            throw new RuntimeException("Unable to load the agent template: {$this->templatePath}");
         }
 
         if (!str_contains($tpl, 'PHPSYNC_PUBLICKEY_PLACEHOLDER') || !str_contains($tpl, '/* PHPSYNC_PROTECT */')) {
-            throw new RuntimeException('Šablona agenta neobsahuje očekávané placeholdery.');
+            throw new RuntimeException('The agent template does not contain the expected placeholders.');
         }
 
         $protectCode = implode(', ', array_map(

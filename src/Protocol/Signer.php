@@ -7,18 +7,19 @@ namespace PhpSync\Protocol;
 use RuntimeException;
 
 /**
- * Ed25519 podpis requestů (libsodium).
+ * Ed25519 signing of requests (libsodium).
  *
- * Klient drží privátní (secret) klíč a podepisuje; server (agent) drží jen
- * veřejný klíč a ověřuje. Únik agent-souboru tak neumožní podvrhnout request.
+ * The client holds the private (secret) key and signs; the server (agent) holds
+ * only the public key and verifies. A leak of the agent file therefore does not
+ * allow forging a request.
  *
- * Kanonická zpráva (musí být bajt-identická na klientu i agentovi):
+ * Canonical message (must be byte-identical on client and agent):
  *
  *     action LF ts LF nonce LF sha256_hex(body)
  *
- * Tělo (`body`) vstupuje do podpisu jen přes svůj sha256 otisk – podpis tak
- * pokrývá integritu těla i u binárních (upload) requestů, aniž bychom drželi
- * celé tělo v paměti kvůli podpisu.
+ * The body (`body`) enters the signature only via its sha256 digest – the
+ * signature thus covers body integrity even for binary (upload) requests,
+ * without keeping the whole body in memory for signing.
  */
 final class Signer
 {
@@ -28,15 +29,15 @@ final class Signer
     {
         $key = base64_decode($privateKeyBase64, true);
         if ($key === false || strlen($key) !== SODIUM_CRYPTO_SIGN_SECRETKEYBYTES) {
-            throw new RuntimeException('Neplatný privátní klíč v configu.');
+            throw new RuntimeException('Invalid private key in config.');
         }
         $this->secretKey = $key;
     }
 
     /**
-     * Vygeneruje nový pár klíčů (pro `install`).
+     * Generates a new key pair (for `install`).
      *
-     * @return array{public: string, private: string} oba base64
+     * @return array{public: string, private: string} both base64
      */
     public static function generateKeyPair(): array
     {
@@ -48,7 +49,7 @@ final class Signer
     }
 
     /**
-     * Kanonická zpráva pro podpis/ověření. Sdílená definice s agentem.
+     * Canonical message for signing/verification. Shared definition with the agent.
      */
     public static function canonical(string $action, int $ts, string $nonce, string $body): string
     {
@@ -56,7 +57,7 @@ final class Signer
     }
 
     /**
-     * Vytvoří podpisové hlavičky pro daný request.
+     * Builds the signature headers for the given request.
      *
      * @return array<string, string>
      */
@@ -75,7 +76,7 @@ final class Signer
     }
 
     /**
-     * Ověření podpisu (zrcadlí logiku agenta – využito v testech).
+     * Signature verification (mirrors the agent's logic – used in tests).
      */
     public static function verify(
         string $publicKeyBase64,

@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace PhpSync\Protocol;
 
 /**
- * Sdílené konstanty protokolu. Agent (PHP 7.4) musí dodržet stejné hodnoty –
- * šablona agenta je drží jako vlastní kopii, tato třída je referenční zdroj.
+ * Shared protocol constants. The agent (PHP 7.4) must honor the same values –
+ * the agent template keeps them as its own copy; this class is the reference source.
  */
 final class Protocol
 {
-    /** Verze protokolu – zvyš při nekompatibilní změně wire formátu / podpisu. */
+    /** Protocol version – bump on any incompatible change to the wire format / signature. */
     public const VERSION = 1;
 
     public const HEADER_TS = 'X-Sync-Ts';
@@ -25,12 +25,12 @@ final class Protocol
     public const ACTION_UPLOAD = 'upload';
     public const ACTION_DELETE = 'delete';
 
-    /** Maximální povolený rozdíl času klient↔server (s) kvůli replay okну. */
+    /** Maximum allowed client↔server time difference (s) due to the replay window. */
     public const TIME_WINDOW = 300;
 
-    /** Příznak v binárním framu: payload je gzipnutý. */
+    /** Flag in the binary frame: the payload is gzipped. */
     public const FLAG_GZIP = 0b0000_0001;
 
-    /** Hashovací algoritmus pro detekci změn (nejde o bezpečnost). */
+    /** Hashing algorithm for change detection (not for security). */
     public const HASH_ALGO = 'md5';
 }

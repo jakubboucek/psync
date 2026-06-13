@@ -8,23 +8,23 @@ use JsonException;
 use RuntimeException;
 
 /**
- * Serializace na drátě.
+ * On-the-wire serialization.
  *
- * Dva formáty:
- *  - NDJSON (řídicí kanály list/hash/control). Cesty jsou base64, protože názvy
- *    na legacy serverech bývají non-UTF8 (Windows-1250) a `json_encode` by selhal.
- *  - Binární framing (download/upload). Length-prefixed, streamovatelný, paměťově
- *    nenáročný. Layout jednoho framu:
+ * Two formats:
+ *  - NDJSON (the list/hash/control channels). Paths are base64, because file names
+ *    on legacy servers are often non-UTF8 (Windows-1250) and `json_encode` would fail.
+ *  - Binary framing (download/upload). Length-prefixed, streamable, memory-light.
+ *    Layout of a single frame:
  *
- *      [u32 pathLen][path bajty][u8 flags][u64 mtime][u64 origSize][u64 payloadLen][16 md5]
- *      [payloadLen bajtů payloadu]
+ *      [u32 pathLen][path bytes][u8 flags][u64 mtime][u64 origSize][u64 payloadLen][16 md5]
+ *      [payloadLen bytes of payload]
  *
- *    Vše big-endian (pack 'N'/'C'/'J'). Fixní část hlavičky za cestou = 41 B.
- *    Agent (PHP 7.4) musí produkovat bajt-identický formát.
+ *    Everything big-endian (pack 'N'/'C'/'J'). Fixed header part after the path = 41 B.
+ *    The agent (PHP 7.4) must produce a byte-identical format.
  */
 final class Wire
 {
-    /** Délka fixní části hlavičky za cestou: flags(1)+mtime(8)+origSize(8)+payloadLen(8)+md5(16). */
+    /** Length of the fixed header part after the path: flags(1)+mtime(8)+origSize(8)+payloadLen(8)+md5(16). */
     private const HEADER_FIXED = 41;
 
     // --- NDJSON -----------------------------------------------------------
@@ -35,7 +35,7 @@ final class Wire
         try {
             return json_encode($obj, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) . "\n";
         } catch (JsonException $e) {
-            throw new RuntimeException('NDJSON encode selhal: ' . $e->getMessage(), 0, $e);
+            throw new RuntimeException('NDJSON encode failed: ' . $e->getMessage(), 0, $e);
         }
     }
 
@@ -47,7 +47,7 @@ final class Wire
             $data = json_decode(trim($line), true, 512, JSON_THROW_ON_ERROR);
             return $data;
         } catch (JsonException $e) {
-            throw new RuntimeException('NDJSON decode selhal: ' . $e->getMessage(), 0, $e);
+            throw new RuntimeException('NDJSON decode failed: ' . $e->getMessage(), 0, $e);
         }
     }
 
@@ -60,17 +60,17 @@ final class Wire
     {
         $raw = base64_decode($b64, true);
         if ($raw === false) {
-            throw new RuntimeException('Neplatné base64 v cestě.');
+            throw new RuntimeException('Invalid base64 in path.');
         }
         return $raw;
     }
 
-    // --- Binární framing --------------------------------------------------
+    // --- Binary framing ---------------------------------------------------
 
     public static function packFrameHeader(FrameHeader $h): string
     {
         if (strlen($h->md5) !== 16) {
-            throw new RuntimeException('md5 musí být 16 raw bajtů.');
+            throw new RuntimeException('md5 must be 16 raw bytes.');
         }
         return pack('N', strlen($h->path)) . $h->path
             . pack('C', $h->flags)
@@ -81,8 +81,8 @@ final class Wire
     }
 
     /**
-     * Přečte hlavičku jednoho framu ze streamu. Vrátí null na čistém EOF.
-     * Payload (payloadLen bajtů) zůstává ve streamu – přečte/zkopíruje ho volající.
+     * Reads the header of a single frame from the stream. Returns null on clean EOF.
+     * The payload (payloadLen bytes) stays in the stream – the caller reads/copies it.
      *
      * @param resource $stream
      */
@@ -90,7 +90,7 @@ final class Wire
     {
         $lenRaw = self::tryReadExact($stream, 4);
         if ($lenRaw === null) {
-            return null; // konec streamu
+            return null; // end of stream
         }
         $pathLen = self::unpackInt('N', $lenRaw);
         $path = $pathLen > 0 ? self::readExact($stream, $pathLen) : '';
@@ -107,8 +107,9 @@ final class Wire
     }
 
     /**
-     * Přečte přesně $n bajtů ze streamu (fread může vrátit méně). Vyhodí výjimku
-     * při useknutí (i na EOF). Pro detekci EOF na hranici framu viz tryReadExact().
+     * Reads exactly $n bytes from the stream (fread may return fewer). Throws an
+     * exception on truncation (including at EOF). To detect EOF on a frame boundary
+     * see tryReadExact().
      *
      * @param resource $stream
      */
@@ -122,7 +123,7 @@ final class Wire
             $chunk = fread($stream, max(1, $n - strlen($buf)));
             if ($chunk === false || $chunk === '') {
                 throw new RuntimeException(sprintf(
-                    'Useknutý stream: očekáváno %d B, přečteno %d B.',
+                    'Truncated stream: expected %d B, read %d B.',
                     $n,
                     strlen($buf),
                 ));
@@ -133,7 +134,7 @@ final class Wire
     }
 
     /**
-     * Jako readExact, ale na čistém EOF (žádný bajt nepřišel) vrátí null.
+     * Like readExact, but returns null on clean EOF (no byte arrived).
      *
      * @param resource $stream
      */
@@ -150,7 +151,7 @@ final class Wire
     }
 
     /**
-     * Zkopíruje přesně $n bajtů ze zdrojového streamu do cílového po chuncích.
+     * Copies exactly $n bytes from the source stream to the destination, chunk by chunk.
      *
      * @param resource $in
      * @param resource $out
@@ -161,10 +162,10 @@ final class Wire
         while ($remaining > 0) {
             $chunk = fread($in, max(1, min($chunkSize, $remaining)));
             if ($chunk === false || $chunk === '') {
-                throw new RuntimeException("Useknutý payload: zbývalo $remaining B.");
+                throw new RuntimeException("Truncated payload: $remaining B remaining.");
             }
             if (fwrite($out, $chunk) === false) {
-                throw new RuntimeException('Zápis do cílového streamu selhal.');
+                throw new RuntimeException('Write to destination stream failed.');
             }
             $remaining -= strlen($chunk);
         }
@@ -174,7 +175,7 @@ final class Wire
     {
         $unpacked = unpack($format, $data);
         if ($unpacked === false) {
-            throw new RuntimeException('Rozbalení binární hlavičky selhalo.');
+            throw new RuntimeException('Unpacking the binary header failed.');
         }
         return (int) $unpacked[1];
     }

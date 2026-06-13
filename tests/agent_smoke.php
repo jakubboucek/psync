@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 /**
- * Integrační smoke test agenta. Dva režimy:
+ * Integration smoke test for the agent. Two modes:
  *
- *   php tests/agent_smoke.php render <dir>          – vyrenderuje agenta + ukázkový strom
- *                                                     do <dir>, privátní klíč vypíše na STDOUT
- *   php tests/agent_smoke.php check <url> <privkey>  – pro. signed requesty proti běžícímu agentovi
+ *   php tests/agent_smoke.php render <dir>           – renders the agent + a sample tree
+ *                                                      into <dir>, prints the private key to STDOUT
+ *   php tests/agent_smoke.php check <url> <privkey>  – runs signed requests against a running agent
  *
- * Renderování zde je zjednoduchá kopie toho, co bude dělat `install` (fáze 4).
+ * The rendering here is a simplified copy of what `install` will do (phase 4).
  */
 
 use PhpSync\Protocol\Protocol;
@@ -23,14 +23,14 @@ $mode = $argv[1] ?? '';
 if ($mode === 'render') {
     $dir = $argv[2] ?? '';
     if ($dir === '') {
-        fwrite(STDERR, "Chybí cílový adresář.\n");
+        fwrite(STDERR, "Missing target directory.\n");
         exit(2);
     }
     @mkdir($dir . '/sub', 0777, true);
     file_put_contents($dir . '/a.txt', "alpha\n");
     file_put_contents($dir . '/sub/b.txt', "beta beta\n");
-    // název s diakritikou a mezerou – test base64 cest (non-UTF8/Windows-1250
-    // názvy nejdou na macOS APFS vytvořit, ty pokrývá protocol_test.php)
+    // name with diacritics and a space – tests base64 paths (non-UTF8/Windows-1250
+    // names cannot be created on macOS APFS, those are covered by protocol_test.php)
     file_put_contents($dir . '/Žluťoučký kůň.txt', "weird\n");
 
     $pair = Signer::generateKeyPair();
@@ -46,7 +46,7 @@ if ($mode === 'check') {
     $url = $argv[2] ?? '';
     $priv = $argv[3] ?? '';
     if ($url === '' || $priv === '') {
-        fwrite(STDERR, "Použití: check <url> <privkey>\n");
+        fwrite(STDERR, "Usage: check <url> <privkey>\n");
         exit(2);
     }
     $signer = new Signer($priv);
@@ -58,7 +58,7 @@ if ($mode === 'check') {
         }
     };
 
-    /** Pošle podepsaný JSON request, vrátí [httpCode, rawBody]. */
+    /** Sends a signed JSON request, returns [httpCode, rawBody]. */
     $call = static function (string $action, array $payload, ?Signer $s, ?string $forceSig = null) use ($url): array {
         $body = json_encode(array_merge(['action' => $action], $payload));
         $headers = $s ? $s->headers($action, $body) : [];
@@ -86,16 +86,16 @@ if ($mode === 'check') {
     echo "capabilities:\n";
     [$code, $resp] = $call('capabilities', [], $signer);
     $caps = json_decode($resp, true);
-    $assert($code === 200, "HTTP 200 (dostal $code)");
-    $assert(is_array($caps) && ($caps['protocolVersion'] ?? null) === Protocol::VERSION, 'protocolVersion sedí');
-    $assert(($caps['postMaxSize'] ?? 0) > 0 && ($caps['memoryLimit'] ?? 0) !== 0, 'limity vyplněné');
-    $assert(in_array('md5', $caps['hashAlgos'] ?? [], true), 'md5 dostupné');
+    $assert($code === 200, "HTTP 200 (got $code)");
+    $assert(is_array($caps) && ($caps['protocolVersion'] ?? null) === Protocol::VERSION, 'protocolVersion matches');
+    $assert(($caps['postMaxSize'] ?? 0) > 0 && ($caps['memoryLimit'] ?? 0) !== 0, 'limits filled in');
+    $assert(in_array('md5', $caps['hashAlgos'] ?? [], true), 'md5 available');
 
     echo "auth:\n";
-    [$code] = $call('capabilities', [], $signer, 'AAAA'); // podvržený podpis
-    $assert($code === 403, "podvržený podpis → 403 (dostal $code)");
-    [$code] = $call('capabilities', [], null); // bez podpisu
-    $assert($code === 403, "bez podpisu → 403 (dostal $code)");
+    [$code] = $call('capabilities', [], $signer, 'AAAA'); // forged signature
+    $assert($code === 403, "forged signature → 403 (got $code)");
+    [$code] = $call('capabilities', [], null); // no signature
+    $assert($code === 403, "no signature → 403 (got $code)");
 
     echo "list:\n";
     [$code, $resp] = $call('list', ['path' => ''], $signer);
@@ -110,15 +110,15 @@ if ($mode === 'check') {
             $files[Wire::decPath($o['p'])] = $o;
         }
     }
-    $assert($end, 'list končí {"end":true}');
-    $assert(isset($files['a.txt']) && $files['a.txt']['s'] === 6, 'a.txt s velikostí');
-    $assert(isset($files['sub/b.txt']), 'rekurze do sub/');
-    $assert(isset($files['Žluťoučký kůň.txt']), 'název s diakritikou/mezerou přežije (base64)');
+    $assert($end, 'list ends with {"end":true}');
+    $assert(isset($files['a.txt']) && $files['a.txt']['s'] === 6, 'a.txt with size');
+    $assert(isset($files['sub/b.txt']), 'recursion into sub/');
+    $assert(isset($files['Žluťoučký kůň.txt']), 'name with diacritics/space survives (base64)');
 
     echo "list scope + traversal guard:\n";
     [, $resp] = $call('list', ['path' => 'sub'], $signer);
     $scoped = array_filter(explode("\n", trim($resp)), static fn($l) => strpos($l, '"p"') !== false);
-    $assert(count($scoped) === 1, 'scope sub/ vrací jen 1 soubor');
+    $assert(count($scoped) === 1, 'scope sub/ returns only 1 file');
     [, $resp] = $call('list', ['path' => '../../etc'], $signer);
     $errLine = false;
     $leaked = false;
@@ -131,7 +131,7 @@ if ($mode === 'check') {
             $leaked = true;
         }
     }
-    $assert($errLine && !$leaked, 'path traversal odmítnut (error, žádné soubory)');
+    $assert($errLine && !$leaked, 'path traversal rejected (error, no files)');
 
     echo "hash:\n";
     $p64 = Wire::encPath('a.txt');
@@ -143,12 +143,12 @@ if ($mode === 'check') {
             $hashes[Wire::decPath($o['p'])] = $o['h'];
         }
     }
-    $assert(($hashes['a.txt'] ?? '') === md5("alpha\n"), 'md5 a.txt sedí');
-    $assert(array_key_exists('neexistuje.txt', $hashes) && $hashes['neexistuje.txt'] === null, 'chybějící soubor → h:null');
+    $assert(($hashes['a.txt'] ?? '') === md5("alpha\n"), 'md5 a.txt matches');
+    $assert(array_key_exists('neexistuje.txt', $hashes) && $hashes['neexistuje.txt'] === null, 'missing file → h:null');
 
-    echo $failed === 0 ? "\nAGENT OK\n" : "\nSELHALO: $failed\n";
+    echo $failed === 0 ? "\nAGENT OK\n" : "\nFAILED: $failed\n";
     exit($failed === 0 ? 0 : 1);
 }
 
-fwrite(STDERR, "Neznámý režim. Použij 'render' nebo 'check'.\n");
+fwrite(STDERR, "Unknown mode. Use 'render' or 'check'.\n");
 exit(2);

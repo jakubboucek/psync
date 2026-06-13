@@ -13,8 +13,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * `install` – vygeneruje pár klíčů (Ed25519), vyrenderuje agenta s veřejným
- * klíčem (k nahrání přes FTP) a vypíše privátní klíč pro klientský config.
+ * `install` – generates a key pair (Ed25519), renders the agent with the public
+ * key (to upload via FTP) and prints the private key for the client config.
  */
 final class InstallCommand extends Command
 {
@@ -22,10 +22,10 @@ final class InstallCommand extends Command
     {
         $this
             ->setName('install')
-            ->setDescription('Vygeneruje serverového agenta a pár klíčů.')
-            ->addOption('output', 'o', InputOption::VALUE_REQUIRED, 'Kam zapsat vyrenderovaného agenta.', 'agent.php')
-            ->addOption('config', 'c', InputOption::VALUE_REQUIRED, 'Cesta ke konfiguračnímu souboru.', 'php-sync.php')
-            ->addOption('force', 'f', InputOption::VALUE_NONE, 'Přepiš existující soubory bez ptaní.');
+            ->setDescription('Generates the server agent and a key pair.')
+            ->addOption('output', 'o', InputOption::VALUE_REQUIRED, 'Where to write the rendered agent.', 'agent.php')
+            ->addOption('config', 'c', InputOption::VALUE_REQUIRED, 'Path to the configuration file.', 'php-sync.php')
+            ->addOption('force', 'f', InputOption::VALUE_NONE, 'Overwrite existing files without asking.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -36,33 +36,33 @@ final class InstallCommand extends Command
         $force = (bool) $input->getOption('force');
 
         if (is_file($agentPath) && !$force) {
-            $io->error("Soubor '$agentPath' už existuje. Použij --force pro přepsání.");
+            $io->error("File '$agentPath' already exists. Use --force to overwrite.");
             return Command::FAILURE;
         }
 
-        // Protect-list převezmi z existujícího configu (pokud je), ať se zazdí do agenta.
+        // Take the protect-list from the existing config (if any) so it gets baked into the agent.
         $protect = $this->readProtect($configPath);
 
         $pair = Signer::generateKeyPair();
         $agent = (new AgentBuilder())->build($pair['public'], $protect);
 
         if (file_put_contents($agentPath, $agent) === false) {
-            $io->error("Nelze zapsat agenta do '$agentPath'.");
+            $io->error("Unable to write the agent to '$agentPath'.");
             return Command::FAILURE;
         }
 
-        $io->success("Agent vygenerován: $agentPath");
-        $io->writeln('Nahraj ho přes FTP na server (do adresáře, který má být remote rootem).');
+        $io->success("Agent generated: $agentPath");
+        $io->writeln('Upload it to the server via FTP (into the directory that should be the remote root).');
 
-        // Config: pokud chybí, nabídni vygenerování šablony s privátním klíčem.
+        // Config: if it is missing, offer to generate a template with the private key.
         if (!is_file($configPath)) {
             file_put_contents($configPath, $this->configTemplate($pair['private']));
-            $io->success("Vygenerován konfigurační soubor s privátním klíčem: $configPath");
-            $io->writeln('Doplň v něm <comment>url</comment> a <comment>mapping.local</comment>.');
+            $io->success("Configuration file generated with the private key: $configPath");
+            $io->writeln('Fill in <comment>url</comment> and <comment>mapping.local</comment> in it.');
         } else {
-            $io->section('Privátní klíč – vlož do configu jako "privateKey"');
+            $io->section('Private key – add it to the config as "privateKey"');
             $io->writeln("<info>{$pair['private']}</info>");
-            $io->warning('Privátní klíč drž v tajnosti a verzuj ho mimo git.');
+            $io->warning('Keep the private key secret and store it outside of git.');
         }
 
         return Command::SUCCESS;
@@ -89,7 +89,7 @@ final class InstallCommand extends Command
         return <<<PHP
         <?php
 
-        // Konfigurace php-sync. Privátní klíč drž v tajnosti (mimo veřejný git).
+        // php-sync configuration. Keep the private key secret (outside of public git).
         return [
             'url'        => 'https://example.com/agent.php',
             'privateKey' => $key,

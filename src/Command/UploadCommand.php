@@ -14,8 +14,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * `upload` – nahraje na server soubory, které tam chybí nebo se liší (local → remote).
- * S --delete navíc smaže soubory přebývající na serveru (mimo protect-list).
+ * `upload` – uploads to the server the files that are missing there or differ (local → remote).
+ * With --delete it additionally deletes files that are extra on the server (outside the protect-list).
  */
 final class UploadCommand extends AbstractSyncCommand
 {
@@ -24,9 +24,9 @@ final class UploadCommand extends AbstractSyncCommand
         parent::configure();
         $this
             ->setName('upload')
-            ->setDescription('Nahraje rozdílné soubory na server (local → remote).')
-            ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Jen vypiš, co by se přeneslo/smazalo.')
-            ->addOption('delete', null, InputOption::VALUE_NONE, 'Smaž na serveru soubory přebývající oproti lokálu.');
+            ->setDescription('Uploads the differing files to the server (local → remote).')
+            ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Only print what would be transferred/deleted.')
+            ->addOption('delete', null, InputOption::VALUE_NONE, 'Delete files on the server that are extra compared to local.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -38,7 +38,7 @@ final class UploadCommand extends AbstractSyncCommand
 
         $comparison = $this->buildComparator($config, $input, $http)->compare($this->scope($input));
 
-        // local → remote: chybějící na serveru + obsahově odlišné
+        // local → remote: missing on the server + differing in content
         $files = $comparison->localOnly;
         foreach ($comparison->modified as $rel => $pair) {
             $files[$rel] = $pair['local'];
@@ -59,9 +59,9 @@ final class UploadCommand extends AbstractSyncCommand
         }
 
         if ($files === [] && $toDelete === []) {
-            $io->success('Není co nahrávat – server je v synchronizaci.');
+            $io->success('Nothing to upload – the server is in sync.');
             if ($protectedCount > 0) {
-                $io->note("$protectedCount souborů přebývá, ale je chráněno protect-listem.");
+                $io->note("$protectedCount files are extra but protected by the protect-list.");
             }
             return Command::SUCCESS;
         }
@@ -73,7 +73,7 @@ final class UploadCommand extends AbstractSyncCommand
             foreach ($toDelete as $rel) {
                 $output->writeln("<fg=red>␡ $rel</>");
             }
-            $io->note(sprintf('dry-run: %d nahrát, %d smazat.', count($files), count($toDelete)));
+            $io->note(sprintf('dry run: %d to upload, %d to delete.', count($files), count($toDelete)));
             return Command::SUCCESS;
         }
 
@@ -103,15 +103,15 @@ final class UploadCommand extends AbstractSyncCommand
                     $output->writeln("<fg=red>␡ $rel</>");
                 } else {
                     $fail++;
-                    $output->writeln("<fg=red>✗ smazání $rel</> <fg=gray>(" . (string) ($r['err'] ?? '?') . ")</>");
+                    $output->writeln("<fg=red>✗ delete $rel</> <fg=gray>(" . (string) ($r['err'] ?? '?') . ")</>");
                 }
             }
         }
 
         $io->newLine();
-        $io->writeln(sprintf('<info>Nahráno %d, smazáno %d, chyb %d.</info>', $ok, $deleted, $fail));
+        $io->writeln(sprintf('<info>Uploaded %d, deleted %d, errors %d.</info>', $ok, $deleted, $fail));
         if ($protectedCount > 0) {
-            $io->note("$protectedCount přebývajících souborů ponecháno (protect-list).");
+            $io->note("$protectedCount extra files kept (protect-list).");
         }
         return $fail === 0 ? Command::SUCCESS : Command::FAILURE;
     }

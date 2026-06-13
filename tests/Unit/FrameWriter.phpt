@@ -9,7 +9,7 @@ use Tester\Assert;
 require __DIR__ . '/../bootstrap.php';
 
 
-/** Vyrobí dočasný soubor s daným obsahem a mtime. */
+/** Creates a temporary file with the given content and mtime. */
 function makeFile(string $content, int $mtime): string
 {
     $path = tempnam(sys_get_temp_dir(), 'phpsync_src_');
@@ -18,20 +18,20 @@ function makeFile(string $content, int $mtime): string
     return $path;
 }
 
-/** Přečte jediný frame z temp souboru: [header, payload]. */
+/** Reads a single frame from the temp file: [header, payload]. */
 function readSingleFrame(string $frameTmp): array
 {
     $in = fopen($frameTmp, 'rb');
     $header = Wire::readFrameHeader($in);
     $payload = Wire::readExact($in, $header->payloadLen);
-    Assert::null(Wire::readFrameHeader($in)); // jen jeden frame
+    Assert::null(Wire::readFrameHeader($in)); // only one frame
     fclose($in);
     return [$header, $payload];
 }
 
 
-test('nekomprimovaný frame nese přesná metadata i obsah', function () {
-    $content = "obsah souboru\n";
+test('uncompressed frame carries exact metadata and content', function () {
+    $content = "file content\n";
     $src = makeFile($content, 1700000123);
     $frame = FrameWriter::buildFrame('dir/file.txt', $src, false);
 
@@ -49,8 +49,8 @@ test('nekomprimovaný frame nese přesná metadata i obsah', function () {
 });
 
 
-test('gzip frame: payload je komprimovaný, po inflate sedí obsah i md5', function () {
-    $content = str_repeat("komprimovatelny text ", 5000);
+test('gzip frame: payload is compressed, content and md5 match after inflate', function () {
+    $content = str_repeat("compressible text ", 5000);
     $src = makeFile($content, 1700000200);
     $frame = FrameWriter::buildFrame('big.txt', $src, true);
 
@@ -58,8 +58,8 @@ test('gzip frame: payload je komprimovaný, po inflate sedí obsah i md5', funct
     Assert::true($h->isGzipped());
     Assert::same(strlen($content), $h->origSize);
     Assert::same(strlen($payload), $h->payloadLen);
-    Assert::true($h->payloadLen < $h->origSize); // reálně se zmenšil
-    Assert::same(md5($content), $h->md5Hex());   // md5 je z ORIGINÁLU
+    Assert::true($h->payloadLen < $h->origSize); // actually shrank
+    Assert::same(md5($content), $h->md5Hex());   // md5 is of the ORIGINAL
 
     $decompressed = gzdecode($payload);
     Assert::same($content, $decompressed);

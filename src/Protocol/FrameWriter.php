@@ -7,13 +7,13 @@ namespace PhpSync\Protocol;
 use RuntimeException;
 
 /**
- * Sestaví binární frame jednoho souboru (pro upload) do dočasného souboru –
- * streamovaně, paměťově nenáročně, s volitelnou per-file gzip kompresí.
+ * Builds the binary frame of a single file (for upload) into a temporary file –
+ * streamed, memory-light, with optional per-file gzip compression.
  */
 final class FrameWriter
 {
     /**
-     * @return array{tmp: string, size: int} cesta k temp s framem a jeho velikost
+     * @return array{tmp: string, size: int} path to the temp file with the frame and its size
      */
     public static function buildFrame(string $relPath, string $absFile, bool $gz): array
     {
@@ -22,11 +22,11 @@ final class FrameWriter
 
         $frameTmp = tempnam(sys_get_temp_dir(), 'phpsync_fr_');
         if ($frameTmp === false) {
-            throw new RuntimeException('Nelze vytvořit dočasný soubor framu.');
+            throw new RuntimeException('Cannot create temporary frame file.');
         }
         $out = fopen($frameTmp, 'wb');
         if ($out === false) {
-            throw new RuntimeException("Nelze otevřít temp frame: $frameTmp");
+            throw new RuntimeException("Cannot open temp frame: $frameTmp");
         }
 
         if ($gz) {
@@ -44,7 +44,7 @@ final class FrameWriter
             if ($md5raw === false) {
                 fclose($out);
                 @unlink($frameTmp);
-                throw new RuntimeException("Nelze přečíst soubor: $absFile");
+                throw new RuntimeException("Cannot read file: $absFile");
             }
             $header = new FrameHeader($relPath, 0, $mtime, $origSize, $origSize, $md5raw);
             fwrite($out, Wire::packFrameHeader($header));
@@ -60,7 +60,7 @@ final class FrameWriter
     }
 
     /**
-     * Zkomprimuje soubor do dočasného (gzip).
+     * Compresses the file into a temporary one (gzip).
      *
      * @return array{tmp: string, md5: string, len: int}
      */
@@ -69,13 +69,13 @@ final class FrameWriter
         $in = fopen($absFile, 'rb');
         $tmp = tempnam(sys_get_temp_dir(), 'phpsync_gz_');
         if ($in === false || $tmp === false) {
-            throw new RuntimeException("Nelze komprimovat: $absFile");
+            throw new RuntimeException("Cannot compress: $absFile");
         }
         $out = fopen($tmp, 'wb');
         $deflate = deflate_init(ZLIB_ENCODING_GZIP);
         if ($out === false || $deflate === false) {
             fclose($in);
-            throw new RuntimeException("Nelze otevřít gz temp: $tmp");
+            throw new RuntimeException("Cannot open gz temp: $tmp");
         }
 
         $ctx = hash_init('md5');

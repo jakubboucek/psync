@@ -5,16 +5,16 @@ declare(strict_types=1);
 namespace PhpSync\State;
 
 /**
- * Lokální cache výsledků hashování, aby se soubory se shodným obsahem, ale
- * rozdílným mtime nehashovaly při každém porovnání znovu.
+ * Local cache of hashing results, so that files with identical content but
+ * differing mtime are not rehashed on every comparison.
  *
- * Klíč = base64(rel). Hodnota = {ls, lm, rm, md5, eq}:
- *   ls/lm = lokální size/mtime v době ověření
- *   rm    = remote mtime v době ověření
- *   md5   = ověřený lokální md5
- *   eq    = byl obsah shodný s remote?
+ * Key = base64(rel). Value = {ls, lm, rm, md5, eq}:
+ *   ls/lm = local size/mtime at the time of the check
+ *   rm    = remote mtime at the time of the check
+ *   md5   = the verified local md5
+ *   eq    = was the content identical to remote?
  *
- * Verdikt se reusne jen když sedí ls, lm i rm – jakákoli změna → přehashovat.
+ * The verdict is reused only when ls, lm and rm all match - any change → rehash.
  */
 final class StateCache
 {
@@ -27,7 +27,7 @@ final class StateCache
     }
 
     /**
-     * Vrátí uložený verdikt rovnosti, pokud sedí lokální i remote metadata.
+     * Returns the stored equality verdict if both the local and remote metadata match.
      */
     public function lookup(string $rel, int $localSize, int $localMtime, int $remoteMtime): ?bool
     {

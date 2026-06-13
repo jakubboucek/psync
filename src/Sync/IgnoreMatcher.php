@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace PhpSync\Sync;
 
 /**
- * Porovnává relativní cesty proti seznamu vzorů (ignore / protect).
+ * Matches relative paths against a list of patterns (ignore / protect).
  *
- * Sémantika (volně dle dg/ftp-deployment):
- *  - vzor začínající '/' je ukotvený k rootu: '/temp' matchuje 'temp' i 'temp/...'
- *  - vzor bez '/' matchuje basename nebo libovolný segment cesty: '*.log', '.git'
- *  - podporuje glob (fnmatch): '*', '?', '[...]'
+ * Semantics (loosely based on dg/ftp-deployment):
+ *  - a pattern starting with '/' is anchored to the root: '/temp' matches 'temp' and 'temp/...'
+ *  - a pattern without '/' matches the basename or any path segment: '*.log', '.git'
+ *  - supports glob (fnmatch): '*', '?', '[...]'
  */
 final class IgnoreMatcher
 {
@@ -49,7 +49,7 @@ final class IgnoreMatcher
             return fnmatch($p, $rel, FNM_PATHNAME) || fnmatch($p . '/*', $rel, FNM_PATHNAME);
         }
 
-        // Neukotvený vzor – basename nebo libovolný segment.
+        // Unanchored pattern - basename or any segment.
         if (fnmatch($pattern, basename($rel))) {
             return true;
         }

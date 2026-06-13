@@ -1,6 +1,6 @@
 {
     "name": "jakubboucek/php-sync",
-    "description": "Obousměrná rsync-podobná synchronizace souborů přes HTTP agenta pro legacy hostingy (jen FTP).",
+    "description": "Bidirectional rsync-like file synchronization over an HTTP agent for legacy hostings (FTP-only).",
     "type": "library",
     "license": "MIT",
     "authors": [
