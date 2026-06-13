@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpSync\Command;
 
 use PhpSync\Protocol\Protocol;
+use PhpSync\Protocol\Wire;
 use PhpSync\Sync\Uploader;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -14,7 +15,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
  * `upload` – nahraje na server soubory, které tam chybí nebo se liší (local → remote).
- * Mazání přebývajících na serveru přibude ve fázi 7 (--delete).
+ * S --delete navíc smaže soubory přebývající na serveru (mimo protect-list).
  */
 final class UploadCommand extends AbstractSyncCommand
 {
@@ -24,7 +25,8 @@ final class UploadCommand extends AbstractSyncCommand
         $this
             ->setName('upload')
             ->setDescription('Nahraje rozdílné soubory na server (local → remote).')
-            ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Jen vypiš, co by se přeneslo.');
+            ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Jen vypiš, co by se přeneslo/smazalo.')
+            ->addOption('delete', null, InputOption::VALUE_NONE, 'Smaž na serveru soubory přebývající oproti lokálu.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -42,15 +44,36 @@ final class UploadCommand extends AbstractSyncCommand
             $files[$rel] = $pair['local'];
         }
 
-        if ($files === []) {
+        $delete = (bool) $input->getOption('delete');
+        $protect = $this->buildProtect($config);
+        $toDelete = [];
+        $protectedCount = 0;
+        if ($delete) {
+            foreach ($comparison->remoteOnly as $rel => $e) {
+                if ($protect->matches($rel)) {
+                    $protectedCount++;
+                } else {
+                    $toDelete[] = $rel;
+                }
+            }
+        }
+
+        if ($files === [] && $toDelete === []) {
             $io->success('Není co nahrávat – server je v synchronizaci.');
+            if ($protectedCount > 0) {
+                $io->note("$protectedCount souborů přebývá, ale je chráněno protect-listem.");
+            }
             return Command::SUCCESS;
         }
+
         if ((bool) $input->getOption('dry-run')) {
             foreach ($files as $rel => $e) {
                 $output->writeln("<fg=green>↑ $rel</>");
             }
-            $io->note(sprintf('dry-run: %d souborů by se nahrálo.', count($files)));
+            foreach ($toDelete as $rel) {
+                $output->writeln("<fg=red>␡ $rel</>");
+            }
+            $io->note(sprintf('dry-run: %d nahrát, %d smazat.', count($files), count($toDelete)));
             return Command::SUCCESS;
         }
 
@@ -67,8 +90,29 @@ final class UploadCommand extends AbstractSyncCommand
             }
         });
 
+        $deleted = 0;
+        if ($toDelete !== []) {
+            $paths = array_map(static fn(string $r): string => Wire::encPath($r), $toDelete);
+            foreach ($http->postJson(Protocol::ACTION_DELETE, ['paths' => $paths]) as $r) {
+                if (!isset($r['p'])) {
+                    continue;
+                }
+                $rel = Wire::decPath((string) $r['p']);
+                if (($r['ok'] ?? false) === true) {
+                    $deleted++;
+                    $output->writeln("<fg=red>␡ $rel</>");
+                } else {
+                    $fail++;
+                    $output->writeln("<fg=red>✗ smazání $rel</> <fg=gray>(" . (string) ($r['err'] ?? '?') . ")</>");
+                }
+            }
+        }
+
         $io->newLine();
-        $io->writeln(sprintf('<info>Nahráno %d, chyb %d.</info>', $ok, $fail));
+        $io->writeln(sprintf('<info>Nahráno %d, smazáno %d, chyb %d.</info>', $ok, $deleted, $fail));
+        if ($protectedCount > 0) {
+            $io->note("$protectedCount přebývajících souborů ponecháno (protect-list).");
+        }
         return $fail === 0 ? Command::SUCCESS : Command::FAILURE;
     }
 }

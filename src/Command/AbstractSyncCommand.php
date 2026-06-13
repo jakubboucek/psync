@@ -74,6 +74,14 @@ abstract class AbstractSyncCommand extends Command
         return new IgnoreMatcher($patterns);
     }
 
+    /**
+     * Protect matcher – soubory, které se nikdy nemažou (druhá linie je v agentovi).
+     */
+    protected function buildProtect(Config $config): IgnoreMatcher
+    {
+        return new IgnoreMatcher($config->protect);
+    }
+
     protected function buildComparator(Config $config, InputInterface $input, HttpClient $http): Comparator
     {
         $ignore = $this->buildIgnore($config);

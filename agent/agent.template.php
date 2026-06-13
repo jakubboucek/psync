@@ -274,7 +274,8 @@ function dispatch(array $CONFIG, string $action, $body): void
             handle_upload($CONFIG, $body);
             return;
         case 'delete':
-            throw new AgentError("Akce '$action' bude implementována v další fázi.", 501);
+            handle_delete($CONFIG, json_body($body));
+            return;
         default:
             throw new AgentError("Neznámá akce: '$action'.", 400);
     }
@@ -390,6 +391,83 @@ function handle_hash(array $CONFIG, array $req): void
         emit(array('p' => $p64, 'h' => $h === false ? null : $h));
     }
     emit(array('end' => true));
+}
+
+
+// ===========================================================================
+// Handler: delete
+// ===========================================================================
+
+/**
+ * Vstup: {paths:[base64]}. Smaže soubory, kromě těch v protect-listu (zazděn
+ * při install). Druhá obranná linie – klient maže jen po vlastní kontrole.
+ */
+function handle_delete(array $CONFIG, array $req): void
+{
+    $root = $CONFIG['root'];
+    $protect = isset($CONFIG['protect']) && is_array($CONFIG['protect']) ? $CONFIG['protect'] : array();
+    $paths = isset($req['paths']) && is_array($req['paths']) ? $req['paths'] : array();
+
+    header('Content-Type: application/x-ndjson; charset=utf-8');
+
+    foreach ($paths as $p64) {
+        $rel = base64_decode((string) $p64, true);
+        if ($rel === false) {
+            continue;
+        }
+        if (path_matches_any($rel, $protect)) {
+            emit(array('p' => $p64, 'ok' => false, 'err' => 'protected'));
+            continue;
+        }
+        $abs = resolve_scope($root, $rel);
+        if ($abs === null) {
+            emit(array('p' => $p64, 'ok' => false, 'err' => 'cesta mimo rozsah'));
+            continue;
+        }
+        if (!file_exists($abs)) {
+            emit(array('p' => $p64, 'ok' => true)); // už neexistuje = cíl splněn
+            continue;
+        }
+        if (is_dir($abs) || is_link($abs)) {
+            emit(array('p' => $p64, 'ok' => false, 'err' => 'není běžný soubor'));
+            continue;
+        }
+        emit(array('p' => $p64, 'ok' => @unlink($abs)));
+    }
+    emit(array('end' => true));
+}
+
+/**
+ * Odpovídá relativní cesta některému vzoru? (zrcadlí klientský IgnoreMatcher)
+ */
+function path_matches_any(string $rel, array $patterns): bool
+{
+    $rel = ltrim(str_replace('\\', '/', $rel), '/');
+    foreach ($patterns as $pattern) {
+        $pattern = trim((string) $pattern);
+        if ($pattern === '') {
+            continue;
+        }
+        if (strncmp($pattern, '/', 1) === 0) {
+            $p = ltrim($pattern, '/');
+            if ($rel === $p || strncmp($rel, $p . '/', strlen($p) + 1) === 0) {
+                return true;
+            }
+            if (fnmatch($p, $rel, FNM_PATHNAME) || fnmatch($p . '/*', $rel, FNM_PATHNAME)) {
+                return true;
+            }
+        } else {
+            if (fnmatch($pattern, basename($rel))) {
+                return true;
+            }
+            foreach (explode('/', $rel) as $seg) {
+                if (fnmatch($pattern, $seg)) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 
