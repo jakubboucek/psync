@@ -14,7 +14,7 @@
 agent.php
 psync-agent-*.php
 *.private.php
-psync.php
+.psync.php
 
 # IDE / OS
 /.idea/

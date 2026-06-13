@@ -51,7 +51,7 @@ composer global require jakubboucek/psync
 
 ## Configuration
 
-`psync install` generates `psync.php`. Fill in `url` and `mapping.local`:
+`psync install` generates `.psync.php`. Fill in `url` and `mapping.local`:
 
 ```php
 <?php
@@ -70,7 +70,7 @@ return [
 ## Commands
 
 ```bash
-psync install [-o <file>] [-c psync.php]         # generate agent (randomized name) + keys
+psync install [-o <file>] [-c .psync.php]        # generate agent (randomized name) + keys
 psync compare  [path] [-c …] [-v] [--checksum]   # list differences (transfers nothing)
 psync upload   [path] [--delete] [--dry-run]     # local → remote
 psync download [path] [--delete] [--dry-run]     # remote → local

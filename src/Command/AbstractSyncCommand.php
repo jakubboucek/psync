@@ -38,7 +38,7 @@ abstract class AbstractSyncCommand extends Command
                 'c',
                 InputOption::VALUE_REQUIRED,
                 'Path to the configuration file.',
-                'psync.php',
+                '.psync.php',
             )
             ->addOption(
                 'checksum',

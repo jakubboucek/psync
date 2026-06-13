@@ -24,7 +24,7 @@ final class InstallCommand extends Command
             ->setName('install')
             ->setDescription('Generates the server agent and a key pair.')
             ->addOption('output', 'o', InputOption::VALUE_REQUIRED, 'Where to write the rendered agent (default: a randomized psync-agent-<nonce>.php).', 'psync-agent-<nonce>.php')
-            ->addOption('config', 'c', InputOption::VALUE_REQUIRED, 'Path to the configuration file.', 'psync.php')
+            ->addOption('config', 'c', InputOption::VALUE_REQUIRED, 'Path to the configuration file.', '.psync.php')
             ->addOption('force', 'f', InputOption::VALUE_NONE, 'Overwrite existing files without asking.');
     }
 
