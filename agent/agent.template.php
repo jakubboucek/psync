@@ -37,9 +37,12 @@ const HASH_ALGO = 'md5';
 const CHUNK = 65536;
 
 (static function (array $CONFIG): void {
-    // Původní časový limit zachyť DŘÍV, než ho prepare_runtime() vynuluje
-    // přes set_time_limit(0) – klient ho potřebuje pro dávkování.
+    // Původní hodnoty zachyť DŘÍV, než je prepare_runtime() přepíše:
+    //  - max_execution_time vynuluje set_time_limit(0)
+    //  - zlib.output_compression agent za běhu vypne
+    // Klient je potřebuje znát (dávkování, info o serveru).
     $CONFIG['_maxExecutionTime'] = (int) ini_get('max_execution_time');
+    $CONFIG['_zlibOutputCompression'] = ini_get('zlib.output_compression') ? true : false;
     prepare_runtime();
 
     try {
@@ -318,7 +321,7 @@ function handle_capabilities(array $CONFIG): void
             : (int) ini_get('max_execution_time'),
         'setTimeLimitAvailable' => set_time_limit_available(),
         'hashAlgos'             => array_values(array_intersect(array('md5', 'sha1', 'crc32b'), hash_algos())),
-        'zlibOutputCompression' => ini_get('zlib.output_compression') ? true : false,
+        'zlibOutputCompression' => !empty($CONFIG['_zlibOutputCompression']),
     );
     echo json_encode($caps);
 }
