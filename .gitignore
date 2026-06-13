@@ -12,6 +12,7 @@
 
 # Generated agent and config with the private key
 agent.php
+psync-agent-*.php
 *.private.php
 psync.php
 

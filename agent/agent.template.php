@@ -1,15 +1,32 @@
 <?php
 /**
- * psync agent (server-side) – GENERATED FILE.
+ * psync agent — https://github.com/jakubboucek/psync
  *
- * This file is uploaded to the target server over FTP and invoked over HTTP(S).
+ * ── This is NOT a backdoor or a webshell. ──────────────────────────────────
+ *
+ * It is a legitimate maintenance tool that the DEVELOPER of this website uses
+ * to synchronize the site's source code over HTTP — think "rsync for hostings
+ * that only offer FTP". If you found this file while auditing the application
+ * and wondered why it is here: this is why. It was placed here on purpose.
+ *
+ * The application itself NEVER includes, requires, calls, or depends on this
+ * file in any way. It is completely standalone.
+ *
+ * SAFE TO DELETE: removing this file does not affect the website at all — the
+ * only consequence is that the developer loses their sync access to the site.
+ * If you have parted ways with the developer who installed it, you SHOULD
+ * delete it to revoke that access.
+ *
+ * Why it is safe to leave running: this file holds ONLY an Ed25519 PUBLIC key.
+ * Every request must be signed with the matching PRIVATE key, which only the
+ * developer's client holds (it is never stored here). Possessing or reading
+ * this file therefore does not let anyone control the server.
+ *
+ * Learn more / verify the source: https://github.com/jakubboucek/psync
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * GENERATED FILE — do not edit by hand; regenerate with `psync install`.
  * Target compatibility: PHP 7.4+ (no Composer dependencies, only ext-sodium).
- *
- * Security: holds ONLY the public key. Every request must be signed with the
- * private key (Ed25519), which only the client has. A leak of this file does
- * not allow an attacker to sign anything.
- *
- * DO NOT EDIT manually – regenerate with `psync install`.
  */
 
 declare(strict_types=1);

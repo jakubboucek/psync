@@ -9,7 +9,10 @@ documentation is in [README.md](README.md); here are the things important for ed
 - **Client** (`src/`, namespace `JakubBoucek\Psync\`) — Symfony Console, installable as `composer global`.
 - **Agent** (`agent/agent.template.php`) — a template; `install` bakes in the public key and
   the protect-list (placeholders `PSYNC_PUBLICKEY_PLACEHOLDER` and `/* PSYNC_PROTECT */`).
-  Rendered by `JakubBoucek\Psync\Install\AgentBuilder`.
+  Rendered by `JakubBoucek\Psync\Install\AgentBuilder`. `install` writes it under a **randomized
+  filename** `psync-agent-<nonce>.php` (6 hex chars via `random_bytes(3)`) so the URL can't be
+  scanned for; pass `-o` to override. The template's header comment is an on-purpose reassurance for
+  anyone auditing the site later (it's a maintenance tool, not a webshell; safe to delete) — keep it.
 - The rich config (mapping, ignore) lives **on the client**; the agent only knows the public key, its own root
   (`__DIR__`), and the protect-list. That is why `install` is repeated only on key rotation / protocol change.
 

@@ -23,7 +23,7 @@ final class InstallCommand extends Command
         $this
             ->setName('install')
             ->setDescription('Generates the server agent and a key pair.')
-            ->addOption('output', 'o', InputOption::VALUE_REQUIRED, 'Where to write the rendered agent.', 'agent.php')
+            ->addOption('output', 'o', InputOption::VALUE_REQUIRED, 'Where to write the rendered agent (default: a randomized psync-agent-<nonce>.php).')
             ->addOption('config', 'c', InputOption::VALUE_REQUIRED, 'Path to the configuration file.', 'psync.php')
             ->addOption('force', 'f', InputOption::VALUE_NONE, 'Overwrite existing files without asking.');
     }
@@ -31,7 +31,12 @@ final class InstallCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        $agentPath = (string) $input->getOption('output');
+
+        // Randomized filename so the agent URL cannot be guessed/scanned for –
+        // a safety net should a vulnerability ever be found in the agent.
+        $agentFile = 'psync-agent-' . bin2hex(random_bytes(3)) . '.php';
+        $explicitOutput = $input->getOption('output');
+        $agentPath = $explicitOutput !== null ? (string) $explicitOutput : $agentFile;
         $configPath = (string) $input->getOption('config');
         $force = (bool) $input->getOption('force');
 
@@ -53,10 +58,11 @@ final class InstallCommand extends Command
 
         $io->success("Agent generated: $agentPath");
         $io->writeln('Upload it to the server via FTP (into the directory that should be the remote root).');
+        $io->writeln("Then point the config <comment>url</comment> at it, e.g. <comment>https://example.com/" . basename($agentPath) . "</comment>");
 
         // Config: if it is missing, offer to generate a template with the private key.
         if (!is_file($configPath)) {
-            file_put_contents($configPath, $this->configTemplate($pair['private']));
+            file_put_contents($configPath, $this->configTemplate($pair['private'], basename($agentPath)));
             $io->success("Configuration file generated with the private key: $configPath");
             $io->writeln('Fill in <comment>url</comment> and <comment>mapping.local</comment> in it.');
         } else {
@@ -83,7 +89,7 @@ final class InstallCommand extends Command
         return array_values(array_map('strval', $raw['protect']));
     }
 
-    private function configTemplate(string $privateKey): string
+    private function configTemplate(string $privateKey, string $agentFile): string
     {
         $key = var_export($privateKey, true);
         return <<<PHP
@@ -91,7 +97,7 @@ final class InstallCommand extends Command
 
         // psync configuration. Keep the private key secret (outside of public git).
         return [
-            'url'        => 'https://example.com/agent.php',
+            'url'        => 'https://example.com/$agentFile',
             'privateKey' => $key,
             'mapping'    => [
                 'local'  => __DIR__,

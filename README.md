@@ -1,6 +1,6 @@
 # PHP sync (rsync for PHP) tool for dummy webhostings
 
-*A tool for automated deploy/download of PHP applications source code between local PC and dummy web server.*
+*A tool for automated deploy/download of PHP applications source code between local PC and dummy webhosting.*
 
 There is nothing worse than babysitting a PHP application on a hosting that, in this day and age, still
 speaks nothing but FTP. No SSH, no rsync, no Git deploy — just a lonely FTP port and your patience.
@@ -22,7 +22,10 @@ respecting the tiny time/memory/upload limits of cheap shared hosting.
 1. **Install once.** `psync install` generates an **Ed25519** key pair and renders the agent — a single
    self-contained PHP file containing only the **public** key. You upload it via FTP to the directory
    that should become the remote root. The **private** key goes into your local config and nowhere else,
-   so even a leaked agent file lets nobody forge a request.
+   so even a leaked agent file lets nobody forge a request. The agent gets a **randomized filename**
+   (`psync-agent-<nonce>.php`) so its URL can't be scanned for, and it carries a header comment that
+   tells anyone who later stumbles on it that it is a maintenance tool — not a backdoor — and is safe
+   to delete.
 
 2. **Every call is a signed HTTP request.** The client signs each request with the private key; the agent
    verifies it with the public key, plus a timestamp and nonce against replay. It therefore works even
@@ -53,7 +56,7 @@ composer global require jakubboucek/psync
 ```php
 <?php
 return [
-    'url'        => 'https://example.com/agent.php',
+    'url'        => 'https://example.com/psync-agent-XXXXXX.php',
     'privateKey' => 'base64…',                 // from install, keep secret
     'mapping'    => ['local' => __DIR__, 'remote' => '/'],
     'ignore'     => ['/.git', '/vendor', '*.log', '/temp', '/uploads'],
@@ -67,7 +70,7 @@ return [
 ## Commands
 
 ```bash
-psync install [-o agent.php] [-c psync.php]      # generate agent + keys
+psync install [-o <file>] [-c psync.php]         # generate agent (randomized name) + keys
 psync compare  [path] [-c …] [-v] [--checksum]   # list differences (transfers nothing)
 psync upload   [path] [--delete] [--dry-run]     # local → remote
 psync download [path] [--delete] [--dry-run]     # remote → local
