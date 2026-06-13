@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace JakubBoucek\Psync\Command;
 
+use JakubBoucek\Psync\Console\Reporter;
 use JakubBoucek\Psync\Protocol\Protocol;
 use JakubBoucek\Psync\Sync\Comparison;
 use Symfony\Component\Console\Command\Command;
@@ -45,7 +46,8 @@ final class CompareCommand extends AbstractSyncCommand
             ));
         }
 
-        $comparison = $this->buildComparator($config, $input, $http)->compare($this->scope($input));
+        $reporter = new Reporter($output);
+        $comparison = $this->buildComparator($config, $input, $http, $reporter)->compare($this->scope($input));
         $this->render($io, $output, $comparison);
 
         return Command::SUCCESS;

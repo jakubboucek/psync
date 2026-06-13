@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace JakubBoucek\Psync\Command;
 
+use JakubBoucek\Psync\Console\Reporter;
 use JakubBoucek\Psync\Protocol\Protocol;
 use JakubBoucek\Psync\Protocol\Wire;
 use JakubBoucek\Psync\Sync\Uploader;
@@ -36,7 +37,8 @@ final class UploadCommand extends AbstractSyncCommand
         $http = $this->buildHttpClient($config);
         $caps = $http->capabilities();
 
-        $comparison = $this->buildComparator($config, $input, $http)->compare($this->scope($input));
+        $reporter = new Reporter($output);
+        $comparison = $this->buildComparator($config, $input, $http, $reporter)->compare($this->scope($input));
 
         // local → remote: missing on the server + differing in content
         $files = $comparison->localOnly;

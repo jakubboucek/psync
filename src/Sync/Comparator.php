@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace JakubBoucek\Psync\Sync;
 
+use JakubBoucek\Psync\Console\Reporter;
 use JakubBoucek\Psync\Protocol\Protocol;
 use JakubBoucek\Psync\Protocol\Wire;
 use JakubBoucek\Psync\State\StateCache;
@@ -30,6 +31,7 @@ final class Comparator
         private readonly StateCache $cache,
         private readonly string $localRoot,
         private readonly bool $checksum = false,
+        private readonly ?Reporter $reporter = null,
     ) {
     }
 
@@ -139,15 +141,19 @@ final class Comparator
         $result = [];
         $batch = [];
         $batchBytes = 0;
+        $total = count($candidates);
+        $done = 0;
+        $this->reporter?->progressStart('Hashing:');
 
-        $flush = function (array $batch) use (&$result): void {
+        $flush = function (array $batch) use (&$result, &$done, $total): void {
             if ($batch === []) {
                 return;
             }
             $paths = array_map(static fn(string $rel): string => Wire::encPath($rel), $batch);
-            $this->http->streamJson(Protocol::ACTION_HASH, ['paths' => array_values($paths)], static function (array $o) use (&$result): void {
+            $this->http->streamJson(Protocol::ACTION_HASH, ['paths' => array_values($paths)], function (array $o) use (&$result, &$done, $total): void {
                 if (isset($o['p']) && array_key_exists('h', $o) && $o['h'] !== null) {
                     $result[Wire::decPath($o['p'])] = (string) $o['h'];
+                    $this->reporter?->progressUpdate(++$done, $total);
                 }
             });
         };
@@ -163,6 +169,7 @@ final class Comparator
             $batchBytes += $size;
         }
         $flush($batch);
+        $this->reporter?->progressDone();
 
         return $result;
     }
@@ -173,9 +180,13 @@ final class Comparator
     private function localList(string $scope): array
     {
         $map = [];
+        $this->reporter?->progressStart('Scanning local:');
+        $n = 0;
         foreach ($this->walker->walk($scope) as $entry) {
             $map[$entry->path] = $entry;
+            $this->reporter?->progressUpdate(++$n);
         }
+        $this->reporter?->progressDone();
         return $map;
     }
 
@@ -185,16 +196,20 @@ final class Comparator
     private function remoteList(string $scope): array
     {
         $map = [];
-        $this->http->streamJson(Protocol::ACTION_LIST, ['path' => $scope], function (array $o) use (&$map): void {
+        $this->reporter?->progressStart('Scanning remote:');
+        $n = 0;
+        $this->http->streamJson(Protocol::ACTION_LIST, ['path' => $scope], function (array $o) use (&$map, &$n): void {
             if (!isset($o['p'])) {
                 return; // {"end":true}
             }
             $rel = Wire::decPath($o['p']);
+            $this->reporter?->progressUpdate(++$n);
             if ($this->ignore->matches($rel)) {
                 return;
             }
             $map[$rel] = new FileEntry($rel, (int) ($o['s'] ?? 0), (int) ($o['m'] ?? 0));
         });
+        $this->reporter?->progressDone();
         return $map;
     }
 }

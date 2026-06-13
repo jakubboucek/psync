@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace JakubBoucek\Psync\Command;
 
 use JakubBoucek\Psync\Config\Config;
+use JakubBoucek\Psync\Console\Reporter;
 use JakubBoucek\Psync\Protocol\Signer;
 use JakubBoucek\Psync\State\StateCache;
 use JakubBoucek\Psync\Sync\Comparator;
@@ -82,13 +83,13 @@ abstract class AbstractSyncCommand extends Command
         return new IgnoreMatcher($config->protect);
     }
 
-    protected function buildComparator(Config $config, InputInterface $input, HttpClient $http): Comparator
+    protected function buildComparator(Config $config, InputInterface $input, HttpClient $http, ?Reporter $reporter = null): Comparator
     {
         $ignore = $this->buildIgnore($config);
         $walker = new Walker($config->localRoot, $ignore);
         $cache = new StateCache($config->localRoot . '/' . self::STATE_FILE);
         $checksum = $config->checksum || (bool) $input->getOption('checksum');
 
-        return new Comparator($http, $walker, $ignore, $cache, $config->localRoot, $checksum);
+        return new Comparator($http, $walker, $ignore, $cache, $config->localRoot, $checksum, $reporter);
     }
 }

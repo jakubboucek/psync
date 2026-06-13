@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace JakubBoucek\Psync\Command;
 
+use JakubBoucek\Psync\Console\Reporter;
 use JakubBoucek\Psync\Sync\Downloader;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -34,7 +35,8 @@ final class DownloadCommand extends AbstractSyncCommand
         $http = $this->buildHttpClient($config);
         $http->capabilities();
 
-        $comparison = $this->buildComparator($config, $input, $http)->compare($this->scope($input));
+        $reporter = new Reporter($output);
+        $comparison = $this->buildComparator($config, $input, $http, $reporter)->compare($this->scope($input));
 
         // remote → local: missing locally + differing in content
         $files = $comparison->remoteOnly;
