@@ -5,6 +5,12 @@ declare(strict_types=1);
 namespace PhpSync\Command;
 
 use PhpSync\Config\Config;
+use PhpSync\Protocol\Signer;
+use PhpSync\State\StateCache;
+use PhpSync\Sync\Comparator;
+use PhpSync\Sync\IgnoreMatcher;
+use PhpSync\Sync\Walker;
+use PhpSync\Transport\HttpClient;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -15,6 +21,9 @@ use Symfony\Component\Console\Input\InputOption;
  */
 abstract class AbstractSyncCommand extends Command
 {
+    /** Lokální stavová cache – nikdy se nesynchronizuje. */
+    private const STATE_FILE = '.php-sync-state.json';
+
     protected function configure(): void
     {
         $this
@@ -30,6 +39,12 @@ abstract class AbstractSyncCommand extends Command
                 InputOption::VALUE_REQUIRED,
                 'Cesta ke konfiguračnímu souboru.',
                 'php-sync.php',
+            )
+            ->addOption(
+                'checksum',
+                null,
+                InputOption::VALUE_NONE,
+                'Vždy počítej hash (ignoruj mtime i cache), jako rsync -c.',
             );
     }
 
@@ -42,5 +57,30 @@ abstract class AbstractSyncCommand extends Command
     protected function scope(InputInterface $input): string
     {
         return trim((string) $input->getArgument('path'), '/');
+    }
+
+    protected function buildHttpClient(Config $config): HttpClient
+    {
+        return new HttpClient($config->url, new Signer($config->requirePrivateKey()));
+    }
+
+    /**
+     * Sestaví ignore matcher a navíc nikdy nesynchronizuje stavovou cache.
+     */
+    protected function buildIgnore(Config $config): IgnoreMatcher
+    {
+        $patterns = $config->ignore;
+        $patterns[] = '/' . self::STATE_FILE;
+        return new IgnoreMatcher($patterns);
+    }
+
+    protected function buildComparator(Config $config, InputInterface $input, HttpClient $http): Comparator
+    {
+        $ignore = $this->buildIgnore($config);
+        $walker = new Walker($config->localRoot, $ignore);
+        $cache = new StateCache($config->localRoot . '/' . self::STATE_FILE);
+        $checksum = $config->checksum || (bool) $input->getOption('checksum');
+
+        return new Comparator($http, $walker, $ignore, $cache, $config->localRoot, $checksum);
     }
 }
