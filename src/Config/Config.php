@@ -23,6 +23,11 @@ final class Config
     /** @var list<string> */
     public readonly array $compressSkipExt;
 
+    /**
+     * @param mixed[] $ignore
+     * @param mixed[] $protect
+     * @param mixed[] $compressSkipExt
+     */
     public function __construct(
         public readonly string $url,
         public readonly ?string $privateKey,

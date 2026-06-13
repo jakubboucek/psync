@@ -116,11 +116,20 @@ final class Downloader
         }
 
         $ctx = hash_init('md5');
-        $inflate = $header->isGzipped() ? inflate_init(ZLIB_ENCODING_GZIP) : null;
+        $inflate = null;
+        if ($header->isGzipped()) {
+            $inflate = inflate_init(ZLIB_ENCODING_GZIP);
+            if ($inflate === false) {
+                fclose($out);
+                @unlink($tmp);
+                $this->discard($in, $header->payloadLen);
+                return 'nelze inicializovat dekompresi';
+            }
+        }
         $remaining = $header->payloadLen;
 
         while ($remaining > 0) {
-            $chunk = fread($in, $remaining < self::CHUNK ? $remaining : self::CHUNK);
+            $chunk = fread($in, max(1, min(self::CHUNK, $remaining)));
             if ($chunk === false || $chunk === '') {
                 fclose($out);
                 @unlink($tmp);
@@ -172,7 +181,7 @@ final class Downloader
     private function discard($in, int $n): void
     {
         while ($n > 0) {
-            $chunk = fread($in, $n < self::CHUNK ? $n : self::CHUNK);
+            $chunk = fread($in, max(1, min(self::CHUNK, $n)));
             if ($chunk === false || $chunk === '') {
                 return;
             }

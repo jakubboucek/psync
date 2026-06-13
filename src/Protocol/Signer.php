@@ -87,7 +87,11 @@ final class Signer
     ): bool {
         $pub = base64_decode($publicKeyBase64, true);
         $sig = base64_decode($sigBase64, true);
-        if ($pub === false || $sig === false || strlen($pub) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES) {
+        if (
+            $pub === false || $sig === false
+            || strlen($pub) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES
+            || strlen($sig) !== SODIUM_CRYPTO_SIGN_BYTES
+        ) {
             return false;
         }
         $message = self::canonical($action, $ts, $nonce, $body);

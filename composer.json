@@ -26,5 +26,18 @@
     ],
     "config": {
         "sort-packages": true
+    },
+    "require-dev": {
+        "php-parallel-lint/php-parallel-lint": "^1.4",
+        "phpstan/phpstan": "^2.2",
+        "phpstan/phpstan-strict-rules": "^2.0"
+    },
+    "scripts": {
+        "lint": "parallel-lint src bin agent tests",
+        "phpstan": "phpstan analyse --memory-limit=512M",
+        "check": [
+            "@lint",
+            "@phpstan"
+        ]
     }
 }

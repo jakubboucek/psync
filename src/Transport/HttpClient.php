@@ -131,7 +131,9 @@ final class HttpClient
             $head = (string) file_get_contents($tmp, false, null, 0, 4096);
             @unlink($tmp);
             $msg = $head;
-            if (($obj = json_decode(trim(strtok($head, "\n") ?: ''), true)) && isset($obj['error'])) {
+            $firstLine = strtok($head, "\n");
+            $obj = $firstLine === false ? null : json_decode(trim($firstLine), true);
+            if (is_array($obj) && isset($obj['error'])) {
                 $msg = (string) $obj['error'];
             }
             throw new RuntimeException("Agent odpověděl HTTP $code: $msg");

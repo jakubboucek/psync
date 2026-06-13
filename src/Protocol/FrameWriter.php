@@ -30,15 +30,15 @@ final class FrameWriter
         }
 
         if ($gz) {
-            $payloadTmp = self::gzToTemp($absFile, $md5raw, $payloadLen);
-            $header = new FrameHeader($relPath, Protocol::FLAG_GZIP, $mtime, $origSize, $payloadLen, $md5raw);
+            $gzResult = self::gzToTemp($absFile);
+            $header = new FrameHeader($relPath, Protocol::FLAG_GZIP, $mtime, $origSize, $gzResult['len'], $gzResult['md5']);
             fwrite($out, Wire::packFrameHeader($header));
-            $pin = fopen($payloadTmp, 'rb');
+            $pin = fopen($gzResult['tmp'], 'rb');
             if ($pin !== false) {
                 stream_copy_to_stream($pin, $out);
                 fclose($pin);
             }
-            @unlink($payloadTmp);
+            @unlink($gzResult['tmp']);
         } else {
             $md5raw = md5_file($absFile, true);
             if ($md5raw === false) {
@@ -60,9 +60,11 @@ final class FrameWriter
     }
 
     /**
-     * Zkomprimuje soubor do dočasného (gzip), naplní $md5raw a $payloadLen.
+     * Zkomprimuje soubor do dočasného (gzip).
+     *
+     * @return array{tmp: string, md5: string, len: int}
      */
-    private static function gzToTemp(string $absFile, ?string &$md5raw, ?int &$payloadLen): string
+    private static function gzToTemp(string $absFile): array
     {
         $in = fopen($absFile, 'rb');
         $tmp = tempnam(sys_get_temp_dir(), 'phpsync_gz_');
@@ -70,13 +72,13 @@ final class FrameWriter
             throw new RuntimeException("Nelze komprimovat: $absFile");
         }
         $out = fopen($tmp, 'wb');
-        if ($out === false) {
+        $deflate = deflate_init(ZLIB_ENCODING_GZIP);
+        if ($out === false || $deflate === false) {
             fclose($in);
             throw new RuntimeException("Nelze otevřít gz temp: $tmp");
         }
 
         $ctx = hash_init('md5');
-        $deflate = deflate_init(ZLIB_ENCODING_GZIP);
         while (!feof($in)) {
             $chunk = fread($in, 1 << 16);
             if ($chunk === false) {
@@ -84,15 +86,23 @@ final class FrameWriter
             }
             if ($chunk !== '') {
                 hash_update($ctx, $chunk);
-                fwrite($out, deflate_add($deflate, $chunk, ZLIB_NO_FLUSH));
+                $compressed = deflate_add($deflate, $chunk, ZLIB_NO_FLUSH);
+                if ($compressed !== false) {
+                    fwrite($out, $compressed);
+                }
             }
         }
-        fwrite($out, deflate_add($deflate, '', ZLIB_FINISH));
+        $tail = deflate_add($deflate, '', ZLIB_FINISH);
+        if ($tail !== false) {
+            fwrite($out, $tail);
+        }
         fclose($in);
         fclose($out);
 
-        $md5raw = hash_final($ctx, true);
-        $payloadLen = (int) filesize($tmp);
-        return $tmp;
+        return [
+            'tmp' => $tmp,
+            'md5' => hash_final($ctx, true),
+            'len' => (int) filesize($tmp),
+        ];
     }
 }

@@ -88,40 +88,39 @@ final class Wire
      */
     public static function readFrameHeader($stream): ?FrameHeader
     {
-        $lenRaw = self::readExact($stream, 4, allowEof: true);
+        $lenRaw = self::tryReadExact($stream, 4);
         if ($lenRaw === null) {
             return null; // konec streamu
         }
-        $pathLen = unpack('N', $lenRaw)[1];
+        $pathLen = self::unpackInt('N', $lenRaw);
         $path = $pathLen > 0 ? self::readExact($stream, $pathLen) : '';
         $fixed = self::readExact($stream, self::HEADER_FIXED);
 
-        $flags = unpack('C', substr($fixed, 0, 1))[1];
-        $mtime = unpack('J', substr($fixed, 1, 8))[1];
-        $origSize = unpack('J', substr($fixed, 9, 8))[1];
-        $payloadLen = unpack('J', substr($fixed, 17, 8))[1];
-        $md5 = substr($fixed, 25, 16);
-
-        return new FrameHeader($path, $flags, $mtime, $origSize, $payloadLen, $md5);
+        return new FrameHeader(
+            $path,
+            self::unpackInt('C', substr($fixed, 0, 1)),
+            self::unpackInt('J', substr($fixed, 1, 8)),
+            self::unpackInt('J', substr($fixed, 9, 8)),
+            self::unpackInt('J', substr($fixed, 17, 8)),
+            substr($fixed, 25, 16),
+        );
     }
 
     /**
-     * Přečte přesně $n bajtů ze streamu (fread může vrátit méně).
+     * Přečte přesně $n bajtů ze streamu (fread může vrátit méně). Vyhodí výjimku
+     * při useknutí (i na EOF). Pro detekci EOF na hranici framu viz tryReadExact().
      *
      * @param resource $stream
      */
-    public static function readExact($stream, int $n, bool $allowEof = false): ?string
+    public static function readExact($stream, int $n): string
     {
-        if ($n === 0) {
+        if ($n <= 0) {
             return '';
         }
         $buf = '';
         while (strlen($buf) < $n) {
-            $chunk = fread($stream, $n - strlen($buf));
+            $chunk = fread($stream, max(1, $n - strlen($buf)));
             if ($chunk === false || $chunk === '') {
-                if ($allowEof && $buf === '') {
-                    return null; // čistý EOF na hranici framu
-                }
                 throw new RuntimeException(sprintf(
                     'Useknutý stream: očekáváno %d B, přečteno %d B.',
                     $n,
@@ -134,6 +133,23 @@ final class Wire
     }
 
     /**
+     * Jako readExact, ale na čistém EOF (žádný bajt nepřišel) vrátí null.
+     *
+     * @param resource $stream
+     */
+    public static function tryReadExact($stream, int $n): ?string
+    {
+        $first = fread($stream, max(1, $n));
+        if ($first === false || $first === '') {
+            return null;
+        }
+        if (strlen($first) >= $n) {
+            return $first;
+        }
+        return $first . self::readExact($stream, $n - strlen($first));
+    }
+
+    /**
      * Zkopíruje přesně $n bajtů ze zdrojového streamu do cílového po chuncích.
      *
      * @param resource $in
@@ -143,7 +159,7 @@ final class Wire
     {
         $remaining = $n;
         while ($remaining > 0) {
-            $chunk = fread($in, min($chunkSize, $remaining));
+            $chunk = fread($in, max(1, min($chunkSize, $remaining)));
             if ($chunk === false || $chunk === '') {
                 throw new RuntimeException("Useknutý payload: zbývalo $remaining B.");
             }
@@ -152,5 +168,14 @@ final class Wire
             }
             $remaining -= strlen($chunk);
         }
+    }
+
+    private static function unpackInt(string $format, string $data): int
+    {
+        $unpacked = unpack($format, $data);
+        if ($unpacked === false) {
+            throw new RuntimeException('Rozbalení binární hlavičky selhalo.');
+        }
+        return (int) $unpacked[1];
     }
 }

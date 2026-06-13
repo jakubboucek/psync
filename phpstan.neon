@@ -1,0 +1,11 @@
+includes:
+    - vendor/phpstan/phpstan-strict-rules/rules.neon
+
+parameters:
+    level: 8
+    paths:
+        - src
+        - bin
+    # Agent je samostatná šablona pro PHP 7.4 s placeholdery a procedurálním
+    # kódem – analyzuje se zvlášť (phpstan-agent.neon), aby se nemíchaly cílové verze.
+    treatPhpDocTypesAsCertain: false
