@@ -37,6 +37,9 @@ const HASH_ALGO = 'md5';
 const CHUNK = 65536;
 
 (static function (array $CONFIG): void {
+    // Původní časový limit zachyť DŘÍV, než ho prepare_runtime() vynuluje
+    // přes set_time_limit(0) – klient ho potřebuje pro dávkování.
+    $CONFIG['_maxExecutionTime'] = (int) ini_get('max_execution_time');
     prepare_runtime();
 
     try {
@@ -305,7 +308,9 @@ function handle_capabilities(array $CONFIG): void
         'uploadMaxFilesize'     => ini_bytes((string) ini_get('upload_max_filesize')),
         'maxFileUploads'        => (int) ini_get('max_file_uploads'),
         'memoryLimit'           => ini_bytes((string) ini_get('memory_limit')),
-        'maxExecutionTime'      => (int) ini_get('max_execution_time'),
+        'maxExecutionTime'      => isset($CONFIG['_maxExecutionTime'])
+            ? (int) $CONFIG['_maxExecutionTime']
+            : (int) ini_get('max_execution_time'),
         'setTimeLimitAvailable' => set_time_limit_available(),
         'hashAlgos'             => array_values(array_intersect(array('md5', 'sha1', 'crc32b'), hash_algos())),
         'zlibOutputCompression' => ini_get('zlib.output_compression') ? true : false,
