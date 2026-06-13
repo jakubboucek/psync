@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace JakubBoucek\Psync\Transport;
 
+use JakubBoucek\Psync\Console\Reporter;
 use JakubBoucek\Psync\Protocol\Protocol;
 use JakubBoucek\Psync\Protocol\Signer;
 use JakubBoucek\Psync\Protocol\Wire;
@@ -20,6 +21,7 @@ final class HttpClient
     public function __construct(
         private readonly string $url,
         private readonly Signer $signer,
+        private readonly ?Reporter $reporter = null,
     ) {
     }
 
@@ -37,6 +39,13 @@ final class HttpClient
             throw new RuntimeException('Invalid capabilities response.');
         }
         $this->timeOffset = (int) $caps['serverTime'] - time();
+        $this->reporter?->log(sprintf(
+            'Server: PHP %s, post_max_size %d B, max_execution_time %s s, clock offset %+d s',
+            (string) ($caps['phpVersion'] ?? '?'),
+            (int) ($caps['postMaxSize'] ?? 0),
+            (string) ($caps['maxExecutionTime'] ?? '?'),
+            $this->timeOffset,
+        ));
         return $caps;
     }
 
@@ -72,6 +81,10 @@ final class HttpClient
         $headers = $this->signedHeaders($action, $body);
         $headers[] = 'Content-Type: application/json';
 
+        $this->reporter?->debug(sprintf('POST %s (%d B)', $action, strlen($body)));
+        $this->reporter?->trace('→ ' . $this->url);
+        $t0 = microtime(true);
+
         $error = null;
         $this->exec($body, $headers, static function (array $obj) use ($onLine, &$error): void {
             if (isset($obj['error'])) {
@@ -80,6 +93,8 @@ final class HttpClient
             }
             $onLine($obj);
         });
+
+        $this->reporter?->debug(sprintf('  %s done in %d ms', $action, (int) round((microtime(true) - $t0) * 1000)));
 
         if ($error !== null) {
             throw new RuntimeException("Agent returned an error: $error");
@@ -101,6 +116,9 @@ final class HttpClient
         }
         $headers = $this->signedHeaders(Protocol::ACTION_DOWNLOAD, $body);
         $headers[] = 'Content-Type: application/json';
+
+        $fileCount = is_array($payload['files'] ?? null) ? count($payload['files']) : 0;
+        $this->reporter?->debug(sprintf('POST download (%d files)', $fileCount));
 
         $tmp = tempnam(sys_get_temp_dir(), 'psync_dl_');
         if ($tmp === false) {
@@ -152,6 +170,8 @@ final class HttpClient
         $headers = $this->signedHeaders(Protocol::ACTION_UPLOAD, $body);
         $headers[] = Protocol::HEADER_ACTION . ': ' . Protocol::ACTION_UPLOAD;
         $headers[] = 'Content-Type: application/octet-stream';
+
+        $this->reporter?->debug(sprintf('POST upload (%d B)', strlen($body)));
 
         $error = null;
         $this->exec($body, $headers, static function (array $obj) use ($onLine, &$error): void {

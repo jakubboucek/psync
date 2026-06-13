@@ -39,6 +39,7 @@ final class Comparator
     {
         $local = $this->localList($scope);
         $remote = $this->remoteList($scope);
+        $this->reporter?->log(sprintf('Local: %d files, remote: %d files', count($local), count($remote)));
 
         $localOnly = [];
         $remoteOnly = [];
@@ -106,6 +107,12 @@ final class Comparator
             }
             $needHash[$rel] = $pair;
         }
+        $this->reporter?->log(sprintf(
+            'Hash candidates: %d (%d reused from cache, %d to hash)',
+            count($candidates),
+            count($candidates) - count($needHash),
+            count($needHash),
+        ));
         if ($needHash === []) {
             return 0;
         }
@@ -117,6 +124,14 @@ final class Comparator
             $localMd5 = @hash_file(Protocol::HASH_ALGO, $this->localRoot . '/' . $rel);
             $remoteMd5 = $remoteHashes[$rel] ?? null;
             $eq = ($localMd5 !== false && $remoteMd5 !== null && $localMd5 === $remoteMd5);
+
+            $this->reporter?->debug(sprintf(
+                '%s %s (local %s / remote %s)',
+                $eq ? '=' : '≠',
+                $rel,
+                substr($localMd5 === false ? '?' : $localMd5, 0, 8),
+                substr($remoteMd5 ?? '?', 0, 8),
+            ));
 
             if ($eq) {
                 $equal[] = $rel;

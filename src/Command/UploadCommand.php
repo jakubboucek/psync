@@ -34,10 +34,10 @@ final class UploadCommand extends AbstractSyncCommand
     {
         $io = new SymfonyStyle($input, $output);
         $config = $this->loadConfig($input);
-        $http = $this->buildHttpClient($config);
+        $reporter = new Reporter($output);
+        $http = $this->buildHttpClient($config, $reporter);
         $caps = $http->capabilities();
 
-        $reporter = new Reporter($output);
         $comparison = $this->buildComparator($config, $input, $http, $reporter)->compare($this->scope($input));
 
         // local → remote: missing on the server + differing in content

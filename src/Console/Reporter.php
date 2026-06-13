@@ -23,10 +23,34 @@ final class Reporter
     private bool $active = false;
     private int $lastLen = 0;
 
-    public function __construct(OutputInterface $output)
+    public function __construct(private readonly OutputInterface $output)
     {
         $this->err = $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
         $this->live = $this->err->isDecorated() && !$output->isVerbose();
+    }
+
+    /** -v: high-level steps (phases, counts). */
+    public function log(string $message): void
+    {
+        if ($this->output->isVerbose()) {
+            $this->err->writeln("<fg=gray>· $message</>");
+        }
+    }
+
+    /** -vv: per-call detail (HTTP calls, per-file verdicts). */
+    public function debug(string $message): void
+    {
+        if ($this->output->isVeryVerbose()) {
+            $this->err->writeln("<fg=gray>·· $message</>");
+        }
+    }
+
+    /** -vvv: everything (URLs, sizes, raw paths). */
+    public function trace(string $message): void
+    {
+        if ($this->output->isDebug()) {
+            $this->err->writeln("<fg=gray>··· $message</>");
+        }
     }
 
     public function progressStart(string $label): void

@@ -32,10 +32,10 @@ final class DownloadCommand extends AbstractSyncCommand
     {
         $io = new SymfonyStyle($input, $output);
         $config = $this->loadConfig($input);
-        $http = $this->buildHttpClient($config);
+        $reporter = new Reporter($output);
+        $http = $this->buildHttpClient($config, $reporter);
         $http->capabilities();
 
-        $reporter = new Reporter($output);
         $comparison = $this->buildComparator($config, $input, $http, $reporter)->compare($this->scope($input));
 
         // remote → local: missing locally + differing in content

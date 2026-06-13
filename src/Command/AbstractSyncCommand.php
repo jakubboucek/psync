@@ -60,9 +60,9 @@ abstract class AbstractSyncCommand extends Command
         return trim((string) $input->getArgument('path'), '/');
     }
 
-    protected function buildHttpClient(Config $config): HttpClient
+    protected function buildHttpClient(Config $config, ?Reporter $reporter = null): HttpClient
     {
-        return new HttpClient($config->url, new Signer($config->requirePrivateKey()));
+        return new HttpClient($config->url, new Signer($config->requirePrivateKey()), $reporter);
     }
 
     /**

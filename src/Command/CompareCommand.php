@@ -35,7 +35,8 @@ final class CompareCommand extends AbstractSyncCommand
     {
         $io = new SymfonyStyle($input, $output);
         $config = $this->loadConfig($input);
-        $http = $this->buildHttpClient($config);
+        $reporter = new Reporter($output);
+        $http = $this->buildHttpClient($config, $reporter);
 
         $caps = $http->capabilities();
         if (($caps['protocolVersion'] ?? null) !== Protocol::VERSION) {
@@ -46,7 +47,6 @@ final class CompareCommand extends AbstractSyncCommand
             ));
         }
 
-        $reporter = new Reporter($output);
         $comparison = $this->buildComparator($config, $input, $http, $reporter)->compare($this->scope($input));
         $this->render($io, $output, $comparison);
 
