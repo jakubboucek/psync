@@ -80,5 +80,5 @@ Testovací prostředí je v `docker-compose.yml` (server = PHP 7.4 Apache, klien
 ```bash
 docker compose up -d
 docker compose exec client php bin/php-sync compare -c tests/sync.config.php
-php tests/protocol_test.php          # unit testy protokolu
+composer check        # parallel-lint + PHPStan (level 8 + strict) + Nette Tester
 ```

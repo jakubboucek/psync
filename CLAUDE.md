@@ -60,10 +60,16 @@ dokumentace je v [README.md](README.md); tady jsou věci důležité pro úpravy
 - **macOS klient neumí vytvořit non-UTF8 název** (APFS) — Windows-1250 názvy proto pokrývá jen
   `tests/protocol_test.php` na úrovni Wire, ne integrační testy.
 
-## Testování
+## Kontrola kvality a testování
 
-- `php tests/protocol_test.php` — unit testy Signer + Wire (vč. non-UTF8 cest, tamper).
-- `php tests/agent_smoke.php render|check` — integrační test agenta (capabilities/list/hash/auth).
+- **`composer check`** = `lint` (parallel-lint, vč. .phpt) + `phpstan` + `tester`. Pusť před commitem.
+- **PHPStan level 8 + strict-rules** na `src/` + `bin/` (`phpstan.neon`). Agent je mimo (jiná cílová
+  verze, procedurální) — kryje ho parallel-lint, lint na 7.4 a integrační testy. Level `max` se
+  nedrží záměrně: hlásil by „cast mixed" na hranicích JSON/config, kde je koerce úmyslná.
+- **Unit testy** (Nette Tester, `tests/Unit/*.phpt`): `IgnoreMatcher`, `Wire`, `Signer`, `FrameWriter`,
+  `StateCache`, `Config` — čistá logika bez sítě/IO (kromě temp souborů).
+- `php tests/agent_smoke.php render|check` — integrační test agenta (capabilities/list/hash/auth)
+  proti běžícímu serveru; vyžaduje docker compose.
 - `docker-compose.yml` — server PHP 7.4 (`jakubboucek/lamp-devstack-php:7.4-legacy`, pozn.
   legacy verze mají suffix `-legacy`; CLI varianta `-legacy-cli`) + klient PHP 8.4.
   Limity hostingu simuluje `tests/docker/limits.ini` (post_max_size=4M…), varianta

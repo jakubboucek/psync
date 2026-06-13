@@ -7,6 +7,9 @@
 /tests/*.config.php
 /tests/.smoke_priv
 
+# Nette Tester výstup u failnutých testů
+/tests/Unit/output/
+
 # Vygenerovaný agent a config s privátním klíčem
 agent.php
 *.private.php
