@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Sync;
+namespace JakubBoucek\Psync\Sync;
 
-use PhpSync\Protocol\Protocol;
-use PhpSync\Protocol\Wire;
-use PhpSync\State\StateCache;
-use PhpSync\Transport\HttpClient;
+use JakubBoucek\Psync\Protocol\Protocol;
+use JakubBoucek\Psync\Protocol\Wire;
+use JakubBoucek\Psync\State\StateCache;
+use JakubBoucek\Psync\Transport\HttpClient;
 
 /**
  * Core of the 2-phase comparison:

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Transport;
+namespace JakubBoucek\Psync\Transport;
 
-use PhpSync\Protocol\Protocol;
-use PhpSync\Protocol\Signer;
-use PhpSync\Protocol\Wire;
+use JakubBoucek\Psync\Protocol\Protocol;
+use JakubBoucek\Psync\Protocol\Signer;
+use JakubBoucek\Psync\Protocol\Wire;
 use RuntimeException;
 
 /**
@@ -102,7 +102,7 @@ final class HttpClient
         $headers = $this->signedHeaders(Protocol::ACTION_DOWNLOAD, $body);
         $headers[] = 'Content-Type: application/json';
 
-        $tmp = tempnam(sys_get_temp_dir(), 'phpsync_dl_');
+        $tmp = tempnam(sys_get_temp_dir(), 'psync_dl_');
         if ($tmp === false) {
             throw new RuntimeException('Cannot create a temporary file.');
         }

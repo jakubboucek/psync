@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Sync;
+namespace JakubBoucek\Psync\Sync;
 
 /**
  * Metadata for a single file (from the fast listing phase).

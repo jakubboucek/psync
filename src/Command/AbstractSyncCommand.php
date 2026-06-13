@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Command;
+namespace JakubBoucek\Psync\Command;
 
-use PhpSync\Config\Config;
-use PhpSync\Protocol\Signer;
-use PhpSync\State\StateCache;
-use PhpSync\Sync\Comparator;
-use PhpSync\Sync\IgnoreMatcher;
-use PhpSync\Sync\Walker;
-use PhpSync\Transport\HttpClient;
+use JakubBoucek\Psync\Config\Config;
+use JakubBoucek\Psync\Protocol\Signer;
+use JakubBoucek\Psync\State\StateCache;
+use JakubBoucek\Psync\Sync\Comparator;
+use JakubBoucek\Psync\Sync\IgnoreMatcher;
+use JakubBoucek\Psync\Sync\Walker;
+use JakubBoucek\Psync\Transport\HttpClient;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -22,7 +22,7 @@ use Symfony\Component\Console\Input\InputOption;
 abstract class AbstractSyncCommand extends Command
 {
     /** Local state cache – never synchronized. */
-    private const STATE_FILE = '.php-sync-state.json';
+    private const STATE_FILE = '.psync-state.json';
 
     protected function configure(): void
     {
@@ -38,7 +38,7 @@ abstract class AbstractSyncCommand extends Command
                 'c',
                 InputOption::VALUE_REQUIRED,
                 'Path to the configuration file.',
-                'php-sync.php',
+                'psync.php',
             )
             ->addOption(
                 'checksum',

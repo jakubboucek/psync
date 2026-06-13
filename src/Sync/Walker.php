@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Sync;
+namespace JakubBoucek\Psync\Sync;
 
 /**
  * Local recursive file traversal - mirrors the agent's behavior (deterministic,

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Protocol;
+namespace JakubBoucek\Psync\Protocol;
 
 /**
  * Shared protocol constants. The agent (PHP 7.4) must honor the same values –

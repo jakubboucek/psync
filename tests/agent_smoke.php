@@ -12,9 +12,9 @@ declare(strict_types=1);
  * The rendering here is a simplified copy of what `install` will do (phase 4).
  */
 
-use PhpSync\Protocol\Protocol;
-use PhpSync\Protocol\Signer;
-use PhpSync\Protocol\Wire;
+use JakubBoucek\Psync\Protocol\Protocol;
+use JakubBoucek\Psync\Protocol\Signer;
+use JakubBoucek\Psync\Protocol\Wire;
 
 require __DIR__ . '/../vendor/autoload.php';
 
@@ -35,7 +35,7 @@ if ($mode === 'render') {
 
     $pair = Signer::generateKeyPair();
     $tpl = file_get_contents(__DIR__ . '/../agent/agent.template.php');
-    $tpl = str_replace('PHPSYNC_PUBLICKEY_PLACEHOLDER', $pair['public'], $tpl);
+    $tpl = str_replace('PSYNC_PUBLICKEY_PLACEHOLDER', $pair['public'], $tpl);
     file_put_contents($dir . '/agent.php', $tpl);
 
     echo $pair['private'] . "\n";

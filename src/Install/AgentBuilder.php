@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Install;
+namespace JakubBoucek\Psync\Install;
 
 use RuntimeException;
 
@@ -28,7 +28,7 @@ final class AgentBuilder
             throw new RuntimeException("Unable to load the agent template: {$this->templatePath}");
         }
 
-        if (!str_contains($tpl, 'PHPSYNC_PUBLICKEY_PLACEHOLDER') || !str_contains($tpl, '/* PHPSYNC_PROTECT */')) {
+        if (!str_contains($tpl, 'PSYNC_PUBLICKEY_PLACEHOLDER') || !str_contains($tpl, '/* PSYNC_PROTECT */')) {
             throw new RuntimeException('The agent template does not contain the expected placeholders.');
         }
 
@@ -37,8 +37,8 @@ final class AgentBuilder
             array_values($protect),
         ));
 
-        $tpl = str_replace('PHPSYNC_PUBLICKEY_PLACEHOLDER', $publicKeyBase64, $tpl);
-        $tpl = str_replace('/* PHPSYNC_PROTECT */', $protectCode, $tpl);
+        $tpl = str_replace('PSYNC_PUBLICKEY_PLACEHOLDER', $publicKeyBase64, $tpl);
+        $tpl = str_replace('/* PSYNC_PROTECT */', $protectCode, $tpl);
 
         return $tpl;
     }

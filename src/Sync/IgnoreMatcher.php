@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Sync;
+namespace JakubBoucek\Psync\Sync;
 
 /**
  * Matches relative paths against a list of patterns (ignore / protect).

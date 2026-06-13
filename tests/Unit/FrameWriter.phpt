@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use PhpSync\Protocol\FrameWriter;
-use PhpSync\Protocol\Wire;
+use JakubBoucek\Psync\Protocol\FrameWriter;
+use JakubBoucek\Psync\Protocol\Wire;
 use Tester\Assert;
 
 require __DIR__ . '/../bootstrap.php';
@@ -12,7 +12,7 @@ require __DIR__ . '/../bootstrap.php';
 /** Creates a temporary file with the given content and mtime. */
 function makeFile(string $content, int $mtime): string
 {
-    $path = tempnam(sys_get_temp_dir(), 'phpsync_src_');
+    $path = tempnam(sys_get_temp_dir(), 'psync_src_');
     file_put_contents($path, $content);
     touch($path, $mtime);
     return $path;

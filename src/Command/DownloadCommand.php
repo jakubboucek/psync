@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Command;
+namespace JakubBoucek\Psync\Command;
 
-use PhpSync\Sync\Downloader;
+use JakubBoucek\Psync\Sync\Downloader;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;

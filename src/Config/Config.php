@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Config;
+namespace JakubBoucek\Psync\Config;
 
 use RuntimeException;
 

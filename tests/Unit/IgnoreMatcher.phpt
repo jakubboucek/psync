@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use PhpSync\Sync\IgnoreMatcher;
+use JakubBoucek\Psync\Sync\IgnoreMatcher;
 use Tester\Assert;
 
 require __DIR__ . '/../bootstrap.php';

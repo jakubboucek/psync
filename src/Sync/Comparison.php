@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Sync;
+namespace JakubBoucek\Psync\Sync;
 
 /**
  * Result of a local↔remote comparison. Direction-neutral - upload/download

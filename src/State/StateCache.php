@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\State;
+namespace JakubBoucek\Psync\State;
 
 /**
  * Local cache of hashing results, so that files with identical content but

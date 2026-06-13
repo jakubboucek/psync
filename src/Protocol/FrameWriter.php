@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Protocol;
+namespace JakubBoucek\Psync\Protocol;
 
 use RuntimeException;
 
@@ -20,7 +20,7 @@ final class FrameWriter
         $mtime = (int) @filemtime($absFile);
         $origSize = (int) @filesize($absFile);
 
-        $frameTmp = tempnam(sys_get_temp_dir(), 'phpsync_fr_');
+        $frameTmp = tempnam(sys_get_temp_dir(), 'psync_fr_');
         if ($frameTmp === false) {
             throw new RuntimeException('Cannot create temporary frame file.');
         }
@@ -67,7 +67,7 @@ final class FrameWriter
     private static function gzToTemp(string $absFile): array
     {
         $in = fopen($absFile, 'rb');
-        $tmp = tempnam(sys_get_temp_dir(), 'phpsync_gz_');
+        $tmp = tempnam(sys_get_temp_dir(), 'psync_gz_');
         if ($in === false || $tmp === false) {
             throw new RuntimeException("Cannot compress: $absFile");
         }

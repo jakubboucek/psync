@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Command;
+namespace JakubBoucek\Psync\Command;
 
-use PhpSync\Install\AgentBuilder;
-use PhpSync\Protocol\Signer;
+use JakubBoucek\Psync\Install\AgentBuilder;
+use JakubBoucek\Psync\Protocol\Signer;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -24,7 +24,7 @@ final class InstallCommand extends Command
             ->setName('install')
             ->setDescription('Generates the server agent and a key pair.')
             ->addOption('output', 'o', InputOption::VALUE_REQUIRED, 'Where to write the rendered agent.', 'agent.php')
-            ->addOption('config', 'c', InputOption::VALUE_REQUIRED, 'Path to the configuration file.', 'php-sync.php')
+            ->addOption('config', 'c', InputOption::VALUE_REQUIRED, 'Path to the configuration file.', 'psync.php')
             ->addOption('force', 'f', InputOption::VALUE_NONE, 'Overwrite existing files without asking.');
     }
 
@@ -89,7 +89,7 @@ final class InstallCommand extends Command
         return <<<PHP
         <?php
 
-        // php-sync configuration. Keep the private key secret (outside of public git).
+        // psync configuration. Keep the private key secret (outside of public git).
         return [
             'url'        => 'https://example.com/agent.php',
             'privateKey' => $key,

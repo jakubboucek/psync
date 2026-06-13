@@ -13,7 +13,7 @@
 # Generated agent and config with the private key
 agent.php
 *.private.php
-php-sync.php
+psync.php
 
 # IDE / OS
 /.idea/

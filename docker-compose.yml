@@ -1,11 +1,11 @@
-# Repeatable test environment for php-sync.
+# Repeatable test environment for psync.
 #
 #   server – "remote": agent over HTTP on real PHP 7.4 + Apache (legacy hosting)
-#   client – PHP 8.4 CLI, `php-sync` is called from here
+#   client – PHP 8.4 CLI, `psync` is called from here
 #
 # Usage:
 #   docker compose up -d
-#   docker compose exec client php bin/php-sync <command>
+#   docker compose exec client php bin/psync <command>
 #
 # Shared hosting limits are simulated by a mounted php.ini (tests/docker/limits.ini).
 
@@ -19,7 +19,7 @@ services:
       APACHE_DOCUMENT_ROOT: /var/www/html/remote
     volumes:
       - ./tests/remote:/var/www/html/remote
-      - ./tests/docker/limits.ini:/usr/local/etc/php/conf.d/zz-phpsync-limits.ini:ro
+      - ./tests/docker/limits.ini:/usr/local/etc/php/conf.d/zz-psync-limits.ini:ro
 
   client:
     image: jakubboucek/lamp-devstack-php:8.4-cli
@@ -29,7 +29,7 @@ services:
     environment:
       TZ: Europe/Prague
       # Inside the compose network the server is reachable at hostname `server`.
-      PHPSYNC_AGENT_URL: http://server/agent.php
+      PSYNC_AGENT_URL: http://server/agent.php
     volumes:
       - .:/app
     command: sleep infinity

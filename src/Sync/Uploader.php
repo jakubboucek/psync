@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Sync;
+namespace JakubBoucek\Psync\Sync;
 
-use PhpSync\Protocol\FrameWriter;
-use PhpSync\Protocol\Wire;
-use PhpSync\Transport\HttpClient;
+use JakubBoucek\Psync\Protocol\FrameWriter;
+use JakubBoucek\Psync\Protocol\Wire;
+use JakubBoucek\Psync\Transport\HttpClient;
 
 /**
  * Uploads files to the server in binary batches (frames). The batch size is

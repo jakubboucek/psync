@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use PhpSync\Config\Config;
+use JakubBoucek\Psync\Config\Config;
 use Tester\Assert;
 
 require __DIR__ . '/../bootstrap.php';
@@ -11,7 +11,7 @@ require __DIR__ . '/../bootstrap.php';
 /** Writes a temporary config (PHP returning an array) and returns the path. */
 function writeConfig(array $data): string
 {
-    $path = tempnam(sys_get_temp_dir(), 'phpsync_cfg_') . '.php';
+    $path = tempnam(sys_get_temp_dir(), 'psync_cfg_') . '.php';
     file_put_contents($path, '<?php return ' . var_export($data, true) . ';');
     return $path;
 }
@@ -67,7 +67,7 @@ test('missing mapping.local throws an exception', function () {
 
 
 test('a config that does not return an array throws an exception', function () {
-    $path = tempnam(sys_get_temp_dir(), 'phpsync_cfg_') . '.php';
+    $path = tempnam(sys_get_temp_dir(), 'psync_cfg_') . '.php';
     file_put_contents($path, '<?php return "not-an-array";');
     Assert::exception(fn() => Config::load($path), RuntimeException::class, '%a%must return an array%a%');
     @unlink($path);

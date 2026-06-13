@@ -1,6 +1,6 @@
 <?php
 /**
- * php-sync agent (server-side) – GENERATED FILE.
+ * psync agent (server-side) – GENERATED FILE.
  *
  * This file is uploaded to the target server over FTP and invoked over HTTP(S).
  * Target compatibility: PHP 7.4+ (no Composer dependencies, only ext-sodium).
@@ -9,7 +9,7 @@
  * private key (Ed25519), which only the client has. A leak of this file does
  * not allow an attacker to sign anything.
  *
- * DO NOT EDIT manually – regenerate with `php-sync install`.
+ * DO NOT EDIT manually – regenerate with `psync install`.
  */
 
 declare(strict_types=1);
@@ -18,14 +18,14 @@ declare(strict_types=1);
 // Configuration (values filled in by `install`)
 // ---------------------------------------------------------------------------
 $CONFIG = array(
-    'publicKey'       => 'PHPSYNC_PUBLICKEY_PLACEHOLDER', // base64 of the public key
+    'publicKey'       => 'PSYNC_PUBLICKEY_PLACEHOLDER', // base64 of the public key
     'protocolVersion' => 1,
     'root'            => __DIR__,                          // remote root = agent's directory
-    'protect'         => array(/* PHPSYNC_PROTECT */),     // glob patterns that are never deleted
+    'protect'         => array(/* PSYNC_PROTECT */),     // glob patterns that are never deleted
 );
 
 // ---------------------------------------------------------------------------
-// Protocol constants (must match the client – PhpSync\Protocol\Protocol)
+// Protocol constants (must match the client – JakubBoucek\Psync\Protocol\Protocol)
 // ---------------------------------------------------------------------------
 const HEADER_TS = 'X-Sync-Ts';
 const HEADER_NONCE = 'X-Sync-Nonce';
@@ -143,7 +143,7 @@ function detect_action(?string $actionHeader, $body): string
 function read_body(bool $isUpload)
 {
     if ($isUpload) {
-        $tmp = tempnam(sys_get_temp_dir(), 'phpsync_up_');
+        $tmp = tempnam(sys_get_temp_dir(), 'psync_up_');
         if ($tmp === false) {
             throw new AgentError('Cannot create temporary file.', 500);
         }
@@ -216,7 +216,7 @@ function authenticate(array $CONFIG, string $action, $body): void
  */
 function check_nonce_replay(string $nonce, int $ts): void
 {
-    $store = sys_get_temp_dir() . '/phpsync_nonces';
+    $store = sys_get_temp_dir() . '/psync_nonces';
     $fh = @fopen($store, 'c+');
     if ($fh === false) {
         return; // best-effort
@@ -612,7 +612,7 @@ function write_upload_file(string $abs, $in, array $h)
         return 'cannot create directory';
     }
 
-    $tmp = $abs . '.phpsync-' . substr(md5($abs . $h['mtime']), 0, 8) . '.tmp';
+    $tmp = $abs . '.psync-' . substr(md5($abs . $h['mtime']), 0, 8) . '.tmp';
     $out = fopen($tmp, 'wb');
     if ($out === false) {
         skip_bytes($in, $h['payloadLen']);
@@ -673,7 +673,7 @@ function write_upload_file(string $abs, $in, array $h)
 
 
 // ===========================================================================
-// Binary framing (must match the client – PhpSync\Protocol\Wire)
+// Binary framing (must match the client – JakubBoucek\Psync\Protocol\Wire)
 // ===========================================================================
 
 function frame_pack_header(string $path, int $flags, int $mtime, int $origSize, int $payloadLen, string $md5raw): string
@@ -760,7 +760,7 @@ function skip_bytes($in, int $n): void
 function gz_to_temp(string $abs, &$md5raw, &$plen)
 {
     $in = fopen($abs, 'rb');
-    $tmp = tempnam(sys_get_temp_dir(), 'phpsync_dl_');
+    $tmp = tempnam(sys_get_temp_dir(), 'psync_dl_');
     if ($in === false || $tmp === false) {
         if ($in !== false) {
             fclose($in);

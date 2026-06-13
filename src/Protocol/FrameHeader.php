@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Protocol;
+namespace JakubBoucek\Psync\Protocol;
 
 /**
  * Header of a single file in a binary frame (download/upload).

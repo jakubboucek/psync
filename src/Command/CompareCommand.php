@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Command;
+namespace JakubBoucek\Psync\Command;
 
-use PhpSync\Protocol\Protocol;
-use PhpSync\Sync\Comparison;
+use JakubBoucek\Psync\Protocol\Protocol;
+use JakubBoucek\Psync\Sync\Comparison;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;

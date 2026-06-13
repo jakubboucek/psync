@@ -1,4 +1,4 @@
-# php-sync — development notes
+# psync — development notes
 
 rsync-like bidirectional synchronization over an HTTP agent for legacy hostings (FTP-only).
 Client PHP 8.4+, agent PHP 7.4+ (no dependencies, just ext-sodium). Detailed user
@@ -6,10 +6,10 @@ documentation is in [README.md](README.md); here are the things important for ed
 
 ## Architecture
 
-- **Client** (`src/`, namespace `PhpSync\`) — Symfony Console, installable as `composer global`.
+- **Client** (`src/`, namespace `JakubBoucek\Psync\`) — Symfony Console, installable as `composer global`.
 - **Agent** (`agent/agent.template.php`) — a template; `install` bakes in the public key and
-  the protect-list (placeholders `PHPSYNC_PUBLICKEY_PLACEHOLDER` and `/* PHPSYNC_PROTECT */`).
-  Rendered by `PhpSync\Install\AgentBuilder`.
+  the protect-list (placeholders `PSYNC_PUBLICKEY_PLACEHOLDER` and `/* PSYNC_PROTECT */`).
+  Rendered by `JakubBoucek\Psync\Install\AgentBuilder`.
 - The rich config (mapping, ignore) lives **on the client**; the agent only knows the public key, its own root
   (`__DIR__`), and the protect-list. That is why `install` is repeated only on key rotation / protocol change.
 
@@ -34,7 +34,7 @@ documentation is in [README.md](README.md); here are the things important for ed
 
 - **2-phase comparison** (`Comparator`): listing → candidates (identical size, different mtime) →
   md5 (locally + in batches on the server, ≤100 MB/≤1000). `--checksum` hashes everything.
-- **StateCache** (`.php-sync-state.json` in the local root, auto-ignored): key `base64(rel)`,
+- **StateCache** (`.psync-state.json` in the local root, auto-ignored): key `base64(rel)`,
   the equality verdict is reused only when the local size+mtime and the remote mtime match. This way a
   file that only has a differing mtime (FTP clock mismatch) is not hashed repeatedly.
 - **Transfers**: per-file frame, optionally gzip (deflate/inflate streamed through a temp file).

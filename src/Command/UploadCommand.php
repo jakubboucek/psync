@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Command;
+namespace JakubBoucek\Psync\Command;
 
-use PhpSync\Protocol\Protocol;
-use PhpSync\Protocol\Wire;
-use PhpSync\Sync\Uploader;
+use JakubBoucek\Psync\Protocol\Protocol;
+use JakubBoucek\Psync\Protocol\Wire;
+use JakubBoucek\Psync\Sync\Uploader;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;

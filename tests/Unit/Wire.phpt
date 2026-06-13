@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use PhpSync\Protocol\FrameHeader;
-use PhpSync\Protocol\Protocol;
-use PhpSync\Protocol\Wire;
+use JakubBoucek\Psync\Protocol\FrameHeader;
+use JakubBoucek\Psync\Protocol\Protocol;
+use JakubBoucek\Psync\Protocol\Wire;
 use Tester\Assert;
 
 require __DIR__ . '/../bootstrap.php';

@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use PhpSync\Protocol\Protocol;
-use PhpSync\Protocol\Signer;
+use JakubBoucek\Psync\Protocol\Protocol;
+use JakubBoucek\Psync\Protocol\Signer;
 use Tester\Assert;
 
 require __DIR__ . '/../bootstrap.php';

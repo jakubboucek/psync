@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace PhpSync\Sync;
+namespace JakubBoucek\Psync\Sync;
 
-use PhpSync\Protocol\FrameHeader;
-use PhpSync\Protocol\Wire;
-use PhpSync\Transport\HttpClient;
+use JakubBoucek\Psync\Protocol\FrameHeader;
+use JakubBoucek\Psync\Protocol\Wire;
+use JakubBoucek\Psync\Transport\HttpClient;
 use RuntimeException;
 
 /**
@@ -108,7 +108,7 @@ final class Downloader
             return 'cannot create directory';
         }
 
-        $tmp = $target . '.phpsync.tmp';
+        $tmp = $target . '.psync.tmp';
         $out = fopen($tmp, 'wb');
         if ($out === false) {
             $this->discard($in, $header->payloadLen);

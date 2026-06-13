@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-use PhpSync\State\StateCache;
+use JakubBoucek\Psync\State\StateCache;
 use Tester\Assert;
 
 require __DIR__ . '/../bootstrap.php';
 
 
 test('lookup returns a verdict only when size+mtime match on both sides', function () {
-    $file = tempnam(sys_get_temp_dir(), 'phpsync_state_');
+    $file = tempnam(sys_get_temp_dir(), 'psync_state_');
     $cache = new StateCache($file);
 
     $cache->store('a.txt', 100, 1000, 2000, 'abc123', true);
@@ -25,7 +25,7 @@ test('lookup returns a verdict only when size+mtime match on both sides', functi
 
 
 test('a false verdict is retained and survives save/reload', function () {
-    $file = tempnam(sys_get_temp_dir(), 'phpsync_state_');
+    $file = tempnam(sys_get_temp_dir(), 'psync_state_');
 
     $a = new StateCache($file);
     $a->store('x', 5, 10, 20, 'md5x', false);
@@ -39,6 +39,6 @@ test('a false verdict is retained and survives save/reload', function () {
 
 
 test('nonexistent cache file → empty, no error', function () {
-    $cache = new StateCache(sys_get_temp_dir() . '/phpsync_neexistuje_' . uniqid() . '.json');
+    $cache = new StateCache(sys_get_temp_dir() . '/psync_neexistuje_' . uniqid() . '.json');
     Assert::null($cache->lookup('anything', 1, 2, 3));
 });

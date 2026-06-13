@@ -3,7 +3,7 @@
 
 declare(strict_types=1);
 
-namespace PhpSync;
+namespace JakubBoucek\Psync;
 
 use Symfony\Component\Console\Application;
 
@@ -23,7 +23,7 @@ use Symfony\Component\Console\Application;
     exit(1);
 })();
 
-$app = new Application('php-sync', '0.1.0-dev');
+$app = new Application('psync', '0.1.0-dev');
 
 $app->addCommands([
     new Command\InstallCommand(),
