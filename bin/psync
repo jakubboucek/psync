@@ -27,6 +27,7 @@ $app = new Application('psync', '0.1.0-dev');
 
 $app->addCommands([
     new Command\InstallCommand(),
+    new Command\SelfUpdateCommand(),
     new Command\CompareCommand(),
     new Command\UploadCommand(),
     new Command\DownloadCommand(),

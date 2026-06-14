@@ -111,6 +111,7 @@ and a directory on the other is reported as a **type conflict** and skipped (nev
 
 ```bash
 psync install [-o <file>] [-c .psync.php]        # generate agent (randomized name) + keys
+psync self-update [-c .psync.php] [-o <file>]    # regenerate the agent, keeping the key + URL
 psync compare  [path] [-c …] [-v] [--checksum]   # list differences (transfers nothing)
 psync upload   [path] [--delete] [--dry-run]     # local → remote
 psync download [path] [--delete] [--dry-run]     # remote → local
@@ -122,6 +123,13 @@ psync download [path] [--delete] [--dry-run]     # remote → local
 - **`--checksum`** always computes the hash (ignoring mtime and the cache), like `rsync -c`.
 
 `compare` legend: `>` local only · `<` server only · `M` differs · `=` identical.
+
+- **`install`** is a one-time bootstrap: it generates a fresh key pair and a randomly-named agent, and
+  writes (or, if you confirm, **overwrites**) `.psync.php`. Run on an existing config it first asks whether
+  you actually meant `self-update`.
+- **`self-update`** re-renders the agent after a protocol-version bump (a `psync …` run will tell you when
+  one is needed). It reuses the **existing key and agent filename** from the config, so nothing in
+  `.psync.php` changes — just re-upload the regenerated agent over the old one via FTP.
 
 ## Security
 

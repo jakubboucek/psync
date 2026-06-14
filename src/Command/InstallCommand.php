@@ -32,11 +32,22 @@ final class InstallCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
 
-        $agentPath = $input->getOption('output');
-        // If the value contanins <nonce>, replace it with a random nonce to avoid overwriting existing agents.
-        $agentPath = str_replace('<nonce>', bin2hex(random_bytes(3)), $agentPath);
         $configPath = (string) $input->getOption('config');
         $force = (bool) $input->getOption('force');
+
+        // An existing config almost always means the user wants `self-update` (keep the key
+        // and URL, just re-render the agent after a protocol bump), not a brand-new install
+        // that overwrites the config. Ask – unless --force forces a fresh install outright.
+        if (is_file($configPath) && !$force) {
+            if ($io->confirm("An existing config '$configPath' was found. `install` creates a brand-new key and a new agent, and overwrites the config. Did you mean `self-update` instead (regenerate the agent, keep the existing key and URL)?", true)) {
+                return new SelfUpdateCommand()->generate($io, $configPath, null);
+            }
+            $io->warning("Proceeding with a fresh install – '$configPath' will be overwritten with a new key.");
+        }
+
+        $agentPath = (string) $input->getOption('output');
+        // If the value contanins <nonce>, replace it with a random nonce to avoid overwriting existing agents.
+        $agentPath = str_replace('<nonce>', bin2hex(random_bytes(3)), $agentPath);
 
         if (is_file($agentPath) && !$force) {
             $io->error("File '$agentPath' already exists. Use --force to overwrite.");
@@ -58,16 +69,15 @@ final class InstallCommand extends Command
         $io->writeln('Upload it to the server via FTP (into the directory that should be the remote root).');
         $io->writeln("Then point the config <comment>url</comment> at it, e.g. <comment>https://example.com/" . basename($agentPath) . "</comment>");
 
-        // Config: if it is missing, offer to generate a template with the private key.
-        if (!is_file($configPath)) {
-            file_put_contents($configPath, $this->configTemplate($pair['private'], basename($agentPath)));
-            $io->success("Configuration file generated with the private key: $configPath");
-            $io->writeln('Fill in <comment>url</comment> and <comment>mapping.local</comment> in it.');
-        } else {
-            $io->section('Private key – add it to the config as "privateKey"');
-            $io->writeln("<info>{$pair['private']}</info>");
-            $io->warning('Keep the private key secret and store it outside of git.');
-        }
+        // Fresh install: write (or overwrite) the config template with the new private key.
+        // The existing-config case already returned early via the self-update prompt above,
+        // so reaching here means either no config or an explicit fresh install (--force / declined).
+        $configExisted = is_file($configPath);
+        file_put_contents($configPath, $this->configTemplate($pair['private'], basename($agentPath)));
+        $io->success(($configExisted ? 'Configuration file overwritten' : 'Configuration file generated')
+            . " with the private key: $configPath");
+        $io->writeln('Fill in <comment>url</comment> and <comment>mapping.local</comment> in it.');
+        $io->warning('Keep the private key secret and store it outside of git.');
 
         return Command::SUCCESS;
     }

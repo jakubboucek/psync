@@ -49,6 +49,22 @@ final readonly class Signer
     }
 
     /**
+     * Derives the public key from a private (secret) key – the Ed25519 secret key
+     * embeds its public half, so `self-update` can re-render the agent without the
+     * public key being stored anywhere (the config holds only the private key).
+     *
+     * @return string base64 public key
+     */
+    public static function publicKeyFromPrivate(string $privateKeyBase64): string
+    {
+        $secret = base64_decode($privateKeyBase64, true);
+        if ($secret === false || strlen($secret) !== SODIUM_CRYPTO_SIGN_SECRETKEYBYTES) {
+            throw new RuntimeException('Invalid private key in config.');
+        }
+        return base64_encode(sodium_crypto_sign_publickey_from_secretkey($secret));
+    }
+
+    /**
      * Canonical message for signing/verification. Shared definition with the agent.
      */
     public static function canonical(string $action, int $ts, string $nonce, string $body): string

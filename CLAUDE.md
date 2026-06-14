@@ -18,7 +18,17 @@ documentation is in [README.md](README.md); here are the things important for ed
   runs as its own HTTP entry point. Built-in functions and global constants fall back to global inside
   a namespace, so the agent body stays unqualified (no prefixing needed).
 - The rich config (mapping, ignore) lives **on the client**; the agent only knows the public key, its own root
-  (`__DIR__`), and the protect-list. That is why `install` is repeated only on key rotation / protocol change.
+  (`__DIR__`), and the protect-list. That is why agent (re)generation is needed only on key rotation /
+  protocol change.
+- **`install` vs `self-update`** (`InstallCommand`, `SelfUpdateCommand`): `install` is the bootstrap — new key
+  pair, new randomized filename, and it **writes/overwrites** `.psync.php` with the template. Run over an
+  existing config it asks "did you mean `self-update`?" (default yes) and, on yes, delegates straight to
+  `SelfUpdateCommand::generate()`; on no (or `--force`) it does a fresh install and clobbers the config.
+  `self-update` is the protocol-bump path: it re-renders the agent **reusing** the existing key and filename —
+  the public key is derived from the private key via `Signer::publicKeyFromPrivate()`
+  (`sodium_crypto_sign_publickey_from_secretkey`; the Ed25519 secret embeds its public half, so no public key
+  is ever stored), and the filename is `basename(parse_url($config->url, PHP_URL_PATH))`. No config change, so
+  the user only re-uploads the agent.
 
 ## Protocol (version in `Protocol::VERSION`)
 
