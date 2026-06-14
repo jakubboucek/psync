@@ -27,6 +27,7 @@ if ($mode === 'render') {
         exit(2);
     }
     @mkdir($dir . '/sub', 0777, true);
+    @mkdir($dir . '/empty', 0777, true); // empty directory – listed as a t='d' entry
     file_put_contents($dir . '/a.txt', "alpha\n");
     file_put_contents($dir . '/sub/b.txt', "beta beta\n");
     // name with diacritics and a space – tests base64 paths (non-UTF8/Windows-1250
@@ -120,6 +121,10 @@ if ($mode === 'check') {
     $assert(isset($files['a.txt']) && $files['a.txt']['s'] === 6, 'a.txt with size');
     $assert(isset($files['sub/b.txt']), 'recursion into sub/');
     $assert(isset($files['Žluťoučký kůň.txt']), 'name with diacritics/space survives (base64)');
+    // Directories are first-class entries: t='d'; regular files omit 't'.
+    $assert(isset($files['empty']) && ($files['empty']['t'] ?? null) === 'd', "empty dir listed with t='d'");
+    $assert(isset($files['sub']) && ($files['sub']['t'] ?? null) === 'd', "sub/ listed as directory");
+    $assert(!array_key_exists('t', $files['a.txt']), "regular file omits 't'");
 
     echo "list scope + traversal guard:\n";
     [, $resp] = $call('list', ['path' => 'sub'], $signer);
@@ -151,6 +156,39 @@ if ($mode === 'check') {
     }
     $assert(($hashes['a.txt'] ?? '') === md5("alpha\n"), 'md5 a.txt matches');
     $assert(array_key_exists('neexistuje.txt', $hashes) && $hashes['neexistuje.txt'] === null, 'missing file → h:null');
+
+    echo "mkdir + delete (directory round-trip):\n";
+    $parse = static function (string $resp): array {
+        $out = [];
+        foreach (array_filter(explode("\n", trim($resp))) as $ln) {
+            $o = Wire::parseNdjson($ln);
+            if (isset($o['p'])) {
+                $out[Wire::decPath($o['p'])] = $o;
+            }
+        }
+        return $out;
+    };
+    $d64 = Wire::encPath('smoke_newdir');
+    [, $resp] = $call('mkdir', ['paths' => [$d64]], $signer);
+    $r = $parse($resp);
+    $assert(($r['smoke_newdir']['ok'] ?? false) === true, 'mkdir creates a new directory');
+    [, $resp] = $call('delete', ['paths' => [['p' => $d64, 't' => 'd']]], $signer);
+    $r = $parse($resp);
+    $assert(($r['smoke_newdir']['ok'] ?? false) === true, 'delete removes the empty directory (rmdir)');
+
+    echo "delete is strict about the declared type:\n";
+    // a.txt is a file: requesting it as a directory must fail and leave it intact.
+    [, $resp] = $call('delete', ['paths' => [['p' => Wire::encPath('a.txt'), 't' => 'd']]], $signer);
+    $r = $parse($resp);
+    $assert(($r['a.txt']['ok'] ?? null) === false && ($r['a.txt']['err'] ?? '') === 'not a directory', 'file requested as dir → not a directory');
+    // sub is a directory: requesting it as a file must fail and leave it intact.
+    [, $resp] = $call('delete', ['paths' => [['p' => Wire::encPath('sub')]]], $signer);
+    $r = $parse($resp);
+    $assert(($r['sub']['ok'] ?? null) === false && ($r['sub']['err'] ?? '') === 'not a regular file', 'dir requested as file → not a regular file');
+    // An unknown declared type is rejected, not silently treated as a file.
+    [, $resp] = $call('delete', ['paths' => [['p' => Wire::encPath('a.txt'), 't' => 'x']]], $signer);
+    $r = $parse($resp);
+    $assert(($r['a.txt']['ok'] ?? null) === false && ($r['a.txt']['err'] ?? '') === 'unsupported entry type', 'unknown declared type → rejected');
 
     echo $failed === 0 ? "\nAGENT OK\n" : "\nFAILED: $failed\n";
     exit($failed === 0 ? 0 : 1);

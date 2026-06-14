@@ -18,6 +18,22 @@ test('anchored pattern matches the path and subtree, not elsewhere', function ()
 });
 
 
+test('/dir vs /dir/* differ on the directory entry itself', function () {
+    // The directory-as-entity feature relies on this distinction:
+    //  - '/temp'   ignores the directory entry too (the folder is not created)
+    //  - '/temp/*' keeps the directory entry but ignores its contents
+    $whole = new IgnoreMatcher(['/temp']);
+    Assert::true($whole->matches('temp'));          // the dir entry itself
+    Assert::true($whole->matches('temp/a.txt'));    // and its contents
+
+    $contents = new IgnoreMatcher(['/temp/*']);
+    Assert::false($contents->matches('temp'));       // the dir is kept (created)
+    Assert::true($contents->matches('temp/a.txt'));  // contents are ignored
+    Assert::true($contents->matches('temp/sub'));    // nested dir entry too
+    Assert::true($contents->matches('temp/sub/deep.txt'));
+});
+
+
 test('unanchored glob matches the basename and a segment', function () {
     $m = new IgnoreMatcher(['*.log']);
     Assert::true($m->matches('error.log'));

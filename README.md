@@ -71,6 +71,42 @@ return [
 ];
 ```
 
+### Config keys
+
+- **`url`** – the agent's URL (the randomized `psync-agent-XXXXXX.php` printed by `install`).
+- **`privateKey`** – base64 Ed25519 key from `install`; signs every request. **Keep secret** (the config file is auto-excluded from sync so it can never be uploaded).
+- **`mapping`** – `local` = absolute path to the local website root, `remote` = path under the agent's directory on the server.
+- **`ignore`** / **`protect`** – see below.
+- **`checksum`** – always hash files instead of trusting size+mtime (like `rsync -c`); slower.
+- **`compress`** / **`compressSkipExt`** – gzip the payload during transfer, except for the listed (already-compressed) extensions.
+
+#### `ignore` vs `protect`
+
+These two look similar but do **completely different** things:
+
+- **`ignore`** – the path is **entirely outside synchronization**. It is never uploaded, downloaded, compared, or deleted — psync acts as if it didn't exist on either side. Use it for build artifacts, logs, caches, and anything the server owns (e.g. user uploads). (`.psync-state.json` and the config file itself are always ignored automatically.)
+- **`protect`** – the path **stays in sync** (it can still be created and **overwritten**), it is only shielded from **deletion** by `--delete`. Without `--delete` nothing is deleted anyway, so `protect` only matters together with `--delete`.
+
+> ⚠️ **`protect` does not prevent overwriting** — only deletion. If you want a directory genuinely left alone (typically user-generated content like `/uploads`), put it in **`ignore`**. The example above lists `/uploads` and `/temp` in **both**: `ignore` keeps psync from touching them, and `protect` is the extra safety net so they survive even if they are ever removed from `ignore`.
+
+**Pattern syntax** (same for both lists): a pattern starting with `/` is anchored to the root (`/temp` matches `temp` and everything under it); a pattern without `/` matches any path segment or basename (`*.log`, `.git`); globs `*`, `?`, `[...]` are supported.
+
+> **`/temp` vs `/temp/*`** — because directories are synchronized entities (see below), these differ:
+> `/temp` ignores the folder **itself**, so it is never created on the other side; `/temp/*` keeps the
+> empty `temp/` folder (it **is** created) but ignores everything inside it. Use the `/*` form for a
+> directory the application expects to exist but whose contents are server-owned (caches, runtime logs).
+
+#### Directories
+
+psync synchronizes **directories as first-class entries**, so an **empty** directory is created on the
+other side too (handy for `/temp`, `/log`, or any placeholder folder the application expects to exist).
+With `--delete`, a directory that is missing on the source is removed on the target — but **only if it is
+empty**: deletion is **non-recursive**, contents are deleted first and then the directory. If a directory
+still holds files that your `ignore` mask hid from the comparison (e.g. a stray `*.log`), the `rmdir`
+**fails on purpose** (reported as an error, the run continues and exits non-zero) — that is a deliberate
+state for you to resolve, not something psync silently force-deletes. A path that is a file on one side
+and a directory on the other is reported as a **type conflict** and skipped (never auto-resolved).
+
 ## Commands
 
 ```bash

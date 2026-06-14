@@ -18,7 +18,7 @@ final class Protocol
      * client also hard-fails up front from `capabilities`. A bump therefore
      * forces a re-`install` of the agent.
      */
-    public const int VERSION = 1;
+    public const int VERSION = 2;
 
     public const string HEADER_VERSION = 'X-Psync-Version';
     public const string HEADER_TS = 'X-Psync-Ts';
@@ -32,6 +32,7 @@ final class Protocol
     public const string ACTION_DOWNLOAD = 'download';
     public const string ACTION_UPLOAD = 'upload';
     public const string ACTION_DELETE = 'delete';
+    public const string ACTION_MKDIR = 'mkdir';
 
     /** Maximum allowed client↔server time difference (s) due to the replay window. */
     public const int TIME_WINDOW = 300;

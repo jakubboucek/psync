@@ -53,7 +53,7 @@ use Throwable;
 
 $CONFIG = [
     'publicKey'       => 'PSYNC_PUBLICKEY_PLACEHOLDER', // base64 of the public key
-    'protocolVersion' => 1,
+    'protocolVersion' => 2,
     'root'            => __DIR__,                       // remote root = agent's directory
     'protect'         => [/* PSYNC_PROTECT */],         // glob patterns that are never deleted
 ];
@@ -349,6 +349,9 @@ function dispatch(array $CONFIG, string $action, $body): void
         case 'delete':
             handle_delete($CONFIG, json_body($body));
             return;
+        case 'mkdir':
+            handle_mkdir($CONFIG, json_body($body));
+            return;
         default:
             throw new AgentError("Unknown action: '$action'.", 400);
     }
@@ -407,7 +410,8 @@ function handle_capabilities(array $CONFIG): void
 
 /**
  * Streams NDJSON {p: base64(relpath), s: size, m: mtime} in a deterministic
- * order. After a full traversal it sends {"end": true}.
+ * order; a directory entry additionally carries t='d' (files omit 't'). After a
+ * full traversal it sends {"end": true}.
  *
  * Resumability: list is a fast metadata phase and is expected to fit within
  * the limit. If the client does not receive {"end": true} (timeout/crash), it
@@ -432,8 +436,13 @@ function handle_list(array $CONFIG, array $req): void
         return;
     }
 
-    walk_files($root, $base, function (string $rel, $stat): void {
-        emit(['p' => base64_encode($rel), 's' => (int) $stat['size'], 'm' => (int) $stat['mtime']]);
+    walk_files($root, $base, function (string $rel, $stat, $isDir): void {
+        // A regular file omits 't' (lazy default); a directory carries t='d'.
+        $obj = ['p' => base64_encode($rel), 's' => $isDir ? 0 : (int) $stat['size'], 'm' => (int) $stat['mtime']];
+        if ($isDir) {
+            $obj['t'] = 'd';
+        }
+        emit($obj);
     });
 
     emit(['end' => true]);
@@ -477,9 +486,14 @@ function handle_hash(array $CONFIG, array $req): void
 // ===========================================================================
 
 /**
- * Input: {paths:[base64]}. Deletes files, except those in the protect list
- * (baked in at install time). Second line of defense – the client only deletes
- * after its own check.
+ * Input: {paths:[{p:base64, t?:'d'}]}. Deletes each entry STRICTLY according to
+ * the type the client declared - it never guesses from disk. A regular file
+ * (no 't') is unlink()ed; a directory (t='d') is rmdir()ed NON-recursively, so a
+ * directory that still holds files (e.g. ones hidden by the client's ignore
+ * mask) deliberately fails and is reported. The client orders the entries
+ * deepest-first, so contents arrive before their containing directory.
+ * Protected paths (baked in at install) are never deleted - second line of
+ * defense after the client's own check. Symlinks are never followed/removed.
  */
 function handle_delete(array $CONFIG, array $req): void
 {
@@ -489,11 +503,25 @@ function handle_delete(array $CONFIG, array $req): void
 
     header('Content-Type: application/x-ndjson; charset=utf-8');
 
-    foreach ($paths as $p64) {
-        $rel = base64_decode((string) $p64, true);
+    foreach ($paths as $entry) {
+        if (!is_array($entry) || !isset($entry['p'])) {
+            continue;
+        }
+        $p64 = (string) $entry['p'];
+        $rel = base64_decode($p64, true);
         if ($rel === false) {
             continue;
         }
+        // Strict on the declared type: a file omits 't' (or sends 'f'), a dir
+        // sends 'd'. Any other value is rejected rather than silently treated as
+        // a file - keeps the contract strict and forward-compatible.
+        $type = isset($entry['t']) ? (string) $entry['t'] : 'f';
+        if ($type !== 'f' && $type !== 'd') {
+            emit(['p' => $p64, 'ok' => false, 'err' => 'unsupported entry type']);
+            continue;
+        }
+        $wantDir = $type === 'd';
+
         if (path_matches_any($rel, $protect)) {
             emit(['p' => $p64, 'ok' => false, 'err' => 'protected']);
             continue;
@@ -503,17 +531,63 @@ function handle_delete(array $CONFIG, array $req): void
             emit(['p' => $p64, 'ok' => false, 'err' => 'path outside scope']);
             continue;
         }
+        if (is_link($abs)) {
+            emit(['p' => $p64, 'ok' => false, 'err' => 'refusing to delete a symlink']);
+            continue;
+        }
         if (!file_exists($abs)) {
             emit(['p' => $p64, 'ok' => true]); // already gone = goal met
             continue;
         }
-        if (is_dir($abs) || is_link($abs)) {
+
+        if ($wantDir) {
+            if (!is_dir($abs)) {
+                emit(['p' => $p64, 'ok' => false, 'err' => 'not a directory']);
+                continue;
+            }
+            // Non-recursive on purpose: a non-empty directory must fail.
+            if (@rmdir($abs)) {
+                emit(['p' => $p64, 'ok' => true]);
+            } else {
+                // Distinguish the common "still has (ignore-hidden) content" case
+                // from any other failure (e.g. permissions); rmdir leaves the dir
+                // in place either way, so is_dir() alone can't tell them apart.
+                $err = dir_has_entries($abs) ? 'directory not empty' : 'cannot remove directory';
+                emit(['p' => $p64, 'ok' => false, 'err' => $err]);
+            }
+            continue;
+        }
+
+        if (is_dir($abs)) {
             emit(['p' => $p64, 'ok' => false, 'err' => 'not a regular file']);
             continue;
         }
         emit(['p' => $p64, 'ok' => @unlink($abs)]);
     }
     emit(['end' => true]);
+}
+
+/**
+ * Whether the directory contains at least one entry besides '.' and '..'.
+ * Returns false when it cannot be opened (treated as "not provably non-empty",
+ * so the caller reports a generic failure rather than a misleading one).
+ */
+function dir_has_entries(string $dir): bool
+{
+    $h = @opendir($dir);
+    if ($h === false) {
+        return false;
+    }
+    try {
+        while (($name = readdir($h)) !== false) {
+            if ($name !== '.' && $name !== '..') {
+                return true;
+            }
+        }
+    } finally {
+        closedir($h);
+    }
+    return false;
 }
 
 /**
@@ -547,6 +621,48 @@ function path_matches_any(string $rel, array $patterns): bool
         }
     }
     return false;
+}
+
+
+// ===========================================================================
+// Handler: mkdir
+// ===========================================================================
+
+/**
+ * Input: {paths:[base64]}. Creates each directory (recursively, parents too).
+ * Idempotent: an already-existing directory counts as success. NDJSON output:
+ * {p, ok, err}. Directories carry no content, so this is a plain JSON action
+ * (no binary framing).
+ */
+function handle_mkdir(array $CONFIG, array $req): void
+{
+    $root = $CONFIG['root'];
+    $paths = isset($req['paths']) && is_array($req['paths']) ? $req['paths'] : [];
+
+    header('Content-Type: application/x-ndjson; charset=utf-8');
+
+    foreach ($paths as $p64) {
+        $rel = base64_decode((string) $p64, true);
+        if ($rel === false) {
+            continue;
+        }
+        $abs = resolve_scope($root, $rel);
+        if ($abs === null) {
+            emit(['p' => $p64, 'ok' => false, 'err' => 'path outside scope']);
+            continue;
+        }
+        if (is_dir($abs)) {
+            emit(['p' => $p64, 'ok' => true]); // already there = goal met
+            continue;
+        }
+        if (file_exists($abs)) {
+            emit(['p' => $p64, 'ok' => false, 'err' => 'a file exists at this path']);
+            continue;
+        }
+        $ok = @mkdir($abs, 0775, true) || is_dir($abs);
+        emit(['p' => $p64, 'ok' => $ok, 'err' => $ok ? null : 'cannot create directory']);
+    }
+    emit(['end' => true]);
 }
 
 
@@ -872,7 +988,8 @@ function gz_to_temp(string $abs, &$md5raw, &$plen)
 // ===========================================================================
 
 /**
- * Recursively walks the files under $base (sorted) and calls $cb($relPath, $stat).
+ * Recursively walks the entries under $base (sorted) and calls
+ * $cb($relPath, $stat, $isDir) for both directories and regular files.
  * Does not follow symlinks (protection against loops / escaping the root).
  */
 function walk_files(string $root, string $base, callable $cb): void
@@ -897,11 +1014,17 @@ function walk_files(string $root, string $base, callable $cb): void
                 continue; // we ignore symlinks
             }
             if (is_dir($full)) {
+                // Directories are listed as first-class entries (presence-only),
+                // then descended into. This lets empty directories synchronize.
+                $stat = @stat($full);
+                if ($stat !== false) {
+                    $cb(substr($full, $rootLen), $stat, true);
+                }
                 $subdirs[] = $full;
             } elseif (is_file($full)) {
                 $stat = @stat($full);
                 if ($stat !== false) {
-                    $cb(substr($full, $rootLen), $stat);
+                    $cb(substr($full, $rootLen), $stat, false);
                 }
             }
         }

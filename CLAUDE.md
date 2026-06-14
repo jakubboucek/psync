@@ -33,11 +33,18 @@ documentation is in [README.md](README.md); here are the things important for ed
   hard-fails up front in `HttpClient::capabilities()`. Version is **not** in the signature (a tampered
   header only self-DoSes a MITM). A `Protocol::VERSION` bump therefore forces a re-`install`.
 - Endpoints: `capabilities`, `list`, `hash` (NDJSON), `download` (binary framing response),
-  `upload` (binary framing body, NDJSON response), `delete` (NDJSON).
+  `upload` (binary framing body, NDJSON response), `delete` (NDJSON), `mkdir` (NDJSON).
 
 ### Wire formats (held in two places — client `Wire`/`FrameWriter`, agent inline — must be byte-identical!)
 - **NDJSON**: paths are **base64** (names on legacy servers tend to be non-UTF8/Windows-1250,
   and `json_encode` would fail on them). A listing ends with `{"end":true}`.
+- **Entry type (`t`)**: directories are first-class **presence-only** entries. The `list` line carries
+  `t` (a one-letter type code: `'d'` for a directory); a regular **file omits `t`** (lazy default, so the
+  common line stays `{p,s,m}`). `delete` likewise takes `{paths:[{p,t?}]}` — the client declares each
+  entry's type and the agent acts on it **strictly** (`unlink` for a file, **non-recursive** `rmdir` for
+  a dir, refusing the wrong type). `mkdir` takes `{paths:[base64]}` (always dirs) → `{p,ok,err}`. The `t`
+  scheme is forward-compatible (a future `'l'` for symlinks slots in; the client skips-and-warns on an
+  unknown code). Type lives on the client as the `FileType` enum (`src/Sync/FileType.php`).
 - **Binary frame**: `[u32 pathLen][path][u8 flags][u64 mtime][u64 origSize][u64 payloadLen][16 md5]`,
   big-endian (`pack N/C/J`), the fixed part after the path = **41 B**. `flags` bit0 = gzip payload.
   Definitions: `Wire::packFrameHeader/readFrameHeader`; agent `frame_pack_header/frame_read_header`.
@@ -73,6 +80,14 @@ documentation is in [README.md](README.md); here are the things important for ed
   signature would throw an exception → HTTP 500 instead of 403.
 - **Deletion**: `protect` is filtered by both client and agent (two lines of defense). Protect prevents **deletion**,
   not overwriting during download (extra protected directories typically belong to `ignore` as well).
+- **Directories** (`Walker`/agent `walk_files` emit them, `Comparator` compares by presence): created on
+  sync (incl. empty ones — that is the whole point) via `mkdir -p` (remote = `mkdir` action, local =
+  direct). Removed only with `--delete`, **non-recursive**: the client orders deletions deepest-first
+  (`AbstractSyncCommand::sortDeepestFirst`) so contents go before the dir; the agent's `rmdir` fails on a
+  non-empty dir (e.g. content hidden by the client's `ignore`) — surfaced as an error (run continues,
+  exits non-zero), never force-deleted. A file-vs-dir clash is a `Comparison::$conflict`, reported and
+  skipped (never auto-resolved). The directory-aware `ignore` semantics (`/temp` drops the folder,
+  `/temp/*` keeps it but ignores its contents) fall out of `IgnoreMatcher` unchanged once dirs are entities.
 - **The macOS client cannot create a non-UTF8 name** (APFS) — so Windows-1250 names are covered only by
   `tests/Unit/Wire.phpt` at the Wire level, not by integration tests.
 - **Unicode NFC/NFD**: macOS lists names as NFD, Linux servers as NFC, so the same file would otherwise be

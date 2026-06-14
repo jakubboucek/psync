@@ -6,6 +6,7 @@ namespace JakubBoucek\Psync\Command;
 
 use JakubBoucek\Psync\Console\Reporter;
 use JakubBoucek\Psync\Sync\Comparison;
+use JakubBoucek\Psync\Sync\FileEntry;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -66,10 +67,22 @@ final class CompareCommand extends AbstractSyncCommand
             );
         }
         foreach ($c->localOnly as $rel => $e) {
-            $lines[$rel] = "<fg=green>>  $rel</> <fg=gray>({$this->bytes($e->size)})</>";
+            $lines[$rel] = $e->isDir()
+                ? "<fg=green>>  {$this->display($e)}</>"
+                : "<fg=green>>  {$this->display($e)}</> <fg=gray>({$this->bytes($e->size)})</>";
         }
         foreach ($c->remoteOnly as $rel => $e) {
-            $lines[$rel] = "<fg=red><  $rel</> <fg=gray>({$this->bytes($e->size)})</>";
+            $lines[$rel] = $e->isDir()
+                ? "<fg=red><  {$this->display($e)}</>"
+                : "<fg=red><  {$this->display($e)}</> <fg=gray>({$this->bytes($e->size)})</>";
+        }
+        foreach ($c->conflict as $rel => $pair) {
+            $lines[$rel] = sprintf(
+                '<fg=magenta>!  %s</> <fg=gray>(type conflict: local %s / remote %s)</>',
+                $rel,
+                $pair['local']->isDir() ? 'dir' : 'file',
+                $pair['remote']->isDir() ? 'dir' : 'file',
+            );
         }
 
         ksort($lines, SORT_STRING);
@@ -90,6 +103,12 @@ final class CompareCommand extends AbstractSyncCommand
             count($c->equal),
             $c->hashedCount,
         ));
+    }
+
+    /** The entry's path for display; directories get a trailing slash (like `ls -F`). */
+    private function display(FileEntry $e): string
+    {
+        return $e->isDir() ? $e->path . '/' : $e->path;
     }
 
     private function bytes(int $n): string
