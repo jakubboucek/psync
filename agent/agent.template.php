@@ -49,11 +49,11 @@ $CONFIG = [
 // ---------------------------------------------------------------------------
 // Protocol constants (must match the client – JakubBoucek\Psync\Protocol\Protocol)
 // ---------------------------------------------------------------------------
-const HEADER_VERSION = 'X-Sync-Version';
-const HEADER_TS = 'X-Sync-Ts';
-const HEADER_NONCE = 'X-Sync-Nonce';
-const HEADER_SIG = 'X-Sync-Sig';
-const HEADER_ACTION = 'X-Sync-Action';
+const HEADER_VERSION = 'X-Psync-Version';
+const HEADER_TS = 'X-Psync-Ts';
+const HEADER_NONCE = 'X-Psync-Nonce';
+const HEADER_SIG = 'X-Psync-Sig';
+const HEADER_ACTION = 'X-Psync-Action';
 const TIME_WINDOW = 300;
 const FLAG_GZIP = 1;
 const HASH_ALGO = 'md5';
@@ -206,7 +206,7 @@ function read_body(bool $isUpload)
 }
 
 /**
- * Rejects the request (HTTP 426) if the client's X-Sync-Version header is missing
+ * Rejects the request (HTTP 426) if the client's X-Psync-Version header is missing
  * or does not match the agent's baked-in protocol version. Checked before auth.
  */
 function check_protocol_version(array $CONFIG): void

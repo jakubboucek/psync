@@ -12,7 +12,7 @@ final class Protocol
 {
     /**
      * Protocol version – bump on any incompatible change to the wire format /
-     * signature. The client sends it in the `X-Sync-Version` header on every
+     * signature. The client sends it in the `X-Psync-Version` header on every
      * request; the agent enforces it before auth (except `capabilities`, which
      * stays answerable so the client can discover the agent's version), and the
      * client also hard-fails up front from `capabilities`. A bump therefore
@@ -20,11 +20,11 @@ final class Protocol
      */
     public const int VERSION = 1;
 
-    public const string HEADER_VERSION = 'X-Sync-Version';
-    public const string HEADER_TS = 'X-Sync-Ts';
-    public const string HEADER_NONCE = 'X-Sync-Nonce';
-    public const string HEADER_SIG = 'X-Sync-Sig';
-    public const string HEADER_ACTION = 'X-Sync-Action';
+    public const string HEADER_VERSION = 'X-Psync-Version';
+    public const string HEADER_TS = 'X-Psync-Ts';
+    public const string HEADER_NONCE = 'X-Psync-Nonce';
+    public const string HEADER_SIG = 'X-Psync-Sig';
+    public const string HEADER_ACTION = 'X-Psync-Action';
 
     public const string ACTION_CAPABILITIES = 'capabilities';
     public const string ACTION_LIST = 'list';

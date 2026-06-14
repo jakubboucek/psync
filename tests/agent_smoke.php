@@ -98,8 +98,8 @@ if ($mode === 'check') {
     $assert($code === 403, "no signature → 403 (got $code)");
 
     echo "protocol version:\n";
-    [$code] = $call('list', ['path' => ''], $signer, null, true); // omit X-Sync-Version
-    $assert($code === 426, "list without X-Sync-Version → 426 (got $code)");
+    [$code] = $call('list', ['path' => ''], $signer, null, true); // omit X-Psync-Version
+    $assert($code === 426, "list without X-Psync-Version → 426 (got $code)");
     [$code] = $call('capabilities', [], $signer, null, true); // capabilities is exempt
     $assert($code === 200, "capabilities exempt from version check → 200 (got $code)");
 

@@ -179,7 +179,7 @@ final class HttpClient
     }
 
     /**
-     * Sends the binary upload body (X-Sync-Action: upload) and streams NDJSON results.
+     * Sends the binary upload body (X-Psync-Action: upload) and streams NDJSON results.
      *
      * @param callable(array<string,mixed>):void $onLine
      */
