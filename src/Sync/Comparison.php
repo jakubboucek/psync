@@ -16,6 +16,7 @@ final readonly class Comparison
      * @param array<string, array{local: FileEntry, remote: FileEntry}> $modified content differs
      * @param list<string> $equal identical
      * @param int $hashedCount how many files were actually hashed (diagnostics)
+     * @param array<string, array{local: FileEntry, remote: FileEntry}> $conflict file-vs-directory type clash (never auto-resolved)
      */
     public function __construct(
         public array $localOnly,
@@ -23,11 +24,15 @@ final readonly class Comparison
         public array $modified,
         public array $equal,
         public int $hashedCount = 0,
+        public array $conflict = [],
     ) {
     }
 
     public function isInSync(): bool
     {
-        return $this->localOnly === [] && $this->remoteOnly === [] && $this->modified === [];
+        return $this->localOnly === []
+            && $this->remoteOnly === []
+            && $this->modified === []
+            && $this->conflict === [];
     }
 }

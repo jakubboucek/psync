@@ -45,6 +45,8 @@ final readonly class Comparator
         $remoteOnly = [];
         $modified = [];
         $equal = [];
+        /** @var array<string, array{local: FileEntry, remote: FileEntry}> $conflict */
+        $conflict = [];
         /** @var array<string, array{local: FileEntry, remote: FileEntry}> $candidates */
         $candidates = [];
 
@@ -52,6 +54,17 @@ final readonly class Comparator
             $r = $remote[$rel] ?? null;
             if ($r === null) {
                 $localOnly[$rel] = $l;
+                continue;
+            }
+            // Directories are presence-only: a dir on both sides is in sync; a
+            // dir vs a regular file under the same name is a type conflict that
+            // we never auto-resolve (it would be destructive) - report and skip.
+            if ($l->isDir() || $r->isDir()) {
+                if ($l->isDir() && $r->isDir()) {
+                    $equal[] = $rel;
+                } else {
+                    $conflict[$rel] = ['local' => $l, 'remote' => $r];
+                }
                 continue;
             }
             if (!$this->checksum && $l->size !== $r->size) {
@@ -77,9 +90,10 @@ final readonly class Comparator
         ksort($localOnly);
         ksort($remoteOnly);
         ksort($modified);
+        ksort($conflict);
         sort($equal);
 
-        return new Comparison($localOnly, $remoteOnly, $modified, $equal, $hashed);
+        return new Comparison($localOnly, $remoteOnly, $modified, $equal, $hashed, $conflict);
     }
 
     /**
@@ -236,7 +250,14 @@ final readonly class Comparator
             if ($this->ignore->matches($rel)) {
                 return;
             }
-            $map[PathNormalizer::key($rel)] = new FileEntry($rel, (int) ($o['s'] ?? 0), (int) ($o['m'] ?? 0));
+            $type = FileType::fromWire(isset($o['t']) ? (string) $o['t'] : null);
+            if ($type === null) {
+                // Forward-compat: an unknown entry type (e.g. a future symlink)
+                // from a newer agent - skip it rather than mishandle it.
+                $this->reporter?->log(sprintf('Skipping remote entry of unknown type: %s', $rel));
+                return;
+            }
+            $map[PathNormalizer::key($rel)] = new FileEntry($rel, (int) ($o['s'] ?? 0), (int) ($o['m'] ?? 0), $type);
         });
         $this->reporter?->progressDone();
         return $map;

@@ -407,7 +407,8 @@ function handle_capabilities(array $CONFIG): void
 
 /**
  * Streams NDJSON {p: base64(relpath), s: size, m: mtime} in a deterministic
- * order. After a full traversal it sends {"end": true}.
+ * order; a directory entry additionally carries t='d' (files omit 't'). After a
+ * full traversal it sends {"end": true}.
  *
  * Resumability: list is a fast metadata phase and is expected to fit within
  * the limit. If the client does not receive {"end": true} (timeout/crash), it
@@ -432,8 +433,13 @@ function handle_list(array $CONFIG, array $req): void
         return;
     }
 
-    walk_files($root, $base, function (string $rel, $stat): void {
-        emit(['p' => base64_encode($rel), 's' => (int) $stat['size'], 'm' => (int) $stat['mtime']]);
+    walk_files($root, $base, function (string $rel, $stat, $isDir): void {
+        // A regular file omits 't' (lazy default); a directory carries t='d'.
+        $obj = ['p' => base64_encode($rel), 's' => $isDir ? 0 : (int) $stat['size'], 'm' => (int) $stat['mtime']];
+        if ($isDir) {
+            $obj['t'] = 'd';
+        }
+        emit($obj);
     });
 
     emit(['end' => true]);
@@ -872,7 +878,8 @@ function gz_to_temp(string $abs, &$md5raw, &$plen)
 // ===========================================================================
 
 /**
- * Recursively walks the files under $base (sorted) and calls $cb($relPath, $stat).
+ * Recursively walks the entries under $base (sorted) and calls
+ * $cb($relPath, $stat, $isDir) for both directories and regular files.
  * Does not follow symlinks (protection against loops / escaping the root).
  */
 function walk_files(string $root, string $base, callable $cb): void
@@ -897,11 +904,17 @@ function walk_files(string $root, string $base, callable $cb): void
                 continue; // we ignore symlinks
             }
             if (is_dir($full)) {
+                // Directories are listed as first-class entries (presence-only),
+                // then descended into. This lets empty directories synchronize.
+                $stat = @stat($full);
+                if ($stat !== false) {
+                    $cb(substr($full, $rootLen), $stat, true);
+                }
                 $subdirs[] = $full;
             } elseif (is_file($full)) {
                 $stat = @stat($full);
                 if ($stat !== false) {
-                    $cb(substr($full, $rootLen), $stat);
+                    $cb(substr($full, $rootLen), $stat, false);
                 }
             }
         }

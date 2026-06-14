@@ -64,6 +64,15 @@ final readonly class Walker
                 continue;
             }
             if (is_dir($full)) {
+                // Directories are first-class entries (presence-only): yield the
+                // entry, then recurse. The ignore check above already skipped the
+                // whole subtree if the directory itself matched (e.g. '/temp');
+                // '/temp/*' does not match the directory, so it is kept while its
+                // contents are skipped during recursion.
+                $st = @stat($full);
+                if ($st !== false) {
+                    yield new FileEntry($rel, 0, (int) $st['mtime'], FileType::Dir);
+                }
                 $subdirs[] = $full;
             } elseif (is_file($full)) {
                 $st = @stat($full);
