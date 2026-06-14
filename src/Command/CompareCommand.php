@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace JakubBoucek\Psync\Command;
 
 use JakubBoucek\Psync\Console\Reporter;
-use JakubBoucek\Psync\Protocol\Protocol;
 use JakubBoucek\Psync\Sync\Comparison;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -38,14 +37,8 @@ final class CompareCommand extends AbstractSyncCommand
         $reporter = new Reporter($output);
         $http = $this->buildHttpClient($config, $reporter);
 
-        $caps = $http->capabilities();
-        if (($caps['protocolVersion'] ?? null) !== Protocol::VERSION) {
-            $io->warning(sprintf(
-                'Protocol version mismatch (server %s, client %d). Regenerate the agent with the install command.',
-                (string) ($caps['protocolVersion'] ?? '?'),
-                Protocol::VERSION,
-            ));
-        }
+        // Handshake; capabilities() hard-fails on a protocol version mismatch.
+        $http->capabilities();
 
         $comparison = $this->buildComparator($config, $input, $http, $reporter)->compare($this->scope($input));
         $this->render($io, $output, $comparison);

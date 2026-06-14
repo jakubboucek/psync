@@ -10,9 +10,17 @@ namespace JakubBoucek\Psync\Protocol;
  */
 final class Protocol
 {
-    /** Protocol version – bump on any incompatible change to the wire format / signature. */
+    /**
+     * Protocol version – bump on any incompatible change to the wire format /
+     * signature. The client sends it in the `X-Sync-Version` header on every
+     * request; the agent enforces it before auth (except `capabilities`, which
+     * stays answerable so the client can discover the agent's version), and the
+     * client also hard-fails up front from `capabilities`. A bump therefore
+     * forces a re-`install` of the agent.
+     */
     public const VERSION = 1;
 
+    public const HEADER_VERSION = 'X-Sync-Version';
     public const HEADER_TS = 'X-Sync-Ts';
     public const HEADER_NONCE = 'X-Sync-Nonce';
     public const HEADER_SIG = 'X-Sync-Sig';

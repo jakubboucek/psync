@@ -16,6 +16,9 @@ use RuntimeException;
  */
 final class HttpClient
 {
+    private const VERSION_MISMATCH = 'Protocol version mismatch: the agent rejected the request. '
+        . 'Regenerate the agent with `psync install` and re-upload it.';
+
     private int $timeOffset = 0;
 
     public function __construct(
@@ -39,6 +42,17 @@ final class HttpClient
             throw new RuntimeException('Invalid capabilities response.');
         }
         $this->timeOffset = (int) $caps['serverTime'] - time();
+
+        $agentVersion = (int) ($caps['protocolVersion'] ?? 0);
+        if ($agentVersion !== Protocol::VERSION) {
+            throw new RuntimeException(sprintf(
+                'Protocol version mismatch: the agent is v%d but this psync client is v%d. '
+                . 'Regenerate the agent with `psync install` and re-upload it.',
+                $agentVersion,
+                Protocol::VERSION,
+            ));
+        }
+
         $this->reporter?->log(sprintf(
             'Server: PHP %s, post_max_size %d B, max_execution_time %s s, clock offset %+d s',
             (string) ($caps['phpVersion'] ?? '?'),
@@ -146,6 +160,10 @@ final class HttpClient
             @unlink($tmp);
             throw new RuntimeException("Connection failed: $curlErr");
         }
+        if ($code === 426) {
+            @unlink($tmp);
+            throw new RuntimeException(self::VERSION_MISMATCH);
+        }
         if ($code >= 400) {
             $head = (string) file_get_contents($tmp, false, null, 0, 4096);
             @unlink($tmp);
@@ -229,6 +247,9 @@ final class HttpClient
         if ($ok === false) {
             throw new RuntimeException("Connection failed: $curlErr");
         }
+        if ($code === 426) {
+            throw new RuntimeException(self::VERSION_MISMATCH);
+        }
         if ($code >= 400) {
             throw new RuntimeException("Agent responded with HTTP $code.");
         }
@@ -240,7 +261,7 @@ final class HttpClient
     private function signedHeaders(string $action, string $body): array
     {
         $ts = time() + $this->timeOffset;
-        $h = [];
+        $h = [Protocol::HEADER_VERSION . ': ' . Protocol::VERSION];
         foreach ($this->signer->headers($action, $body, $ts) as $k => $v) {
             $h[] = "$k: $v";
         }
