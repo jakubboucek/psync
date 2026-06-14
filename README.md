@@ -91,6 +91,22 @@ These two look similar but do **completely different** things:
 
 **Pattern syntax** (same for both lists): a pattern starting with `/` is anchored to the root (`/temp` matches `temp` and everything under it); a pattern without `/` matches any path segment or basename (`*.log`, `.git`); globs `*`, `?`, `[...]` are supported.
 
+> **`/temp` vs `/temp/*`** — because directories are synchronized entities (see below), these differ:
+> `/temp` ignores the folder **itself**, so it is never created on the other side; `/temp/*` keeps the
+> empty `temp/` folder (it **is** created) but ignores everything inside it. Use the `/*` form for a
+> directory the application expects to exist but whose contents are server-owned (caches, runtime logs).
+
+#### Directories
+
+psync synchronizes **directories as first-class entries**, so an **empty** directory is created on the
+other side too (handy for `/temp`, `/log`, or any placeholder folder the application expects to exist).
+With `--delete`, a directory that is missing on the source is removed on the target — but **only if it is
+empty**: deletion is **non-recursive**, contents are deleted first and then the directory. If a directory
+still holds files that your `ignore` mask hid from the comparison (e.g. a stray `*.log`), the `rmdir`
+**fails on purpose** (reported as an error, the run continues and exits non-zero) — that is a deliberate
+state for you to resolve, not something psync silently force-deletes. A path that is a file on one side
+and a directory on the other is reported as a **type conflict** and skipped (never auto-resolved).
+
 ## Commands
 
 ```bash
