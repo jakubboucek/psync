@@ -27,6 +27,7 @@ if ($mode === 'render') {
         exit(2);
     }
     @mkdir($dir . '/sub', 0777, true);
+    @mkdir($dir . '/empty', 0777, true); // empty directory – listed as a t='d' entry
     file_put_contents($dir . '/a.txt', "alpha\n");
     file_put_contents($dir . '/sub/b.txt', "beta beta\n");
     // name with diacritics and a space – tests base64 paths (non-UTF8/Windows-1250
@@ -120,6 +121,10 @@ if ($mode === 'check') {
     $assert(isset($files['a.txt']) && $files['a.txt']['s'] === 6, 'a.txt with size');
     $assert(isset($files['sub/b.txt']), 'recursion into sub/');
     $assert(isset($files['Žluťoučký kůň.txt']), 'name with diacritics/space survives (base64)');
+    // Directories are first-class entries: t='d'; regular files omit 't'.
+    $assert(isset($files['empty']) && ($files['empty']['t'] ?? null) === 'd', "empty dir listed with t='d'");
+    $assert(isset($files['sub']) && ($files['sub']['t'] ?? null) === 'd', "sub/ listed as directory");
+    $assert(!array_key_exists('t', $files['a.txt']), "regular file omits 't'");
 
     echo "list scope + traversal guard:\n";
     [, $resp] = $call('list', ['path' => 'sub'], $signer);

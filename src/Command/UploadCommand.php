@@ -46,8 +46,13 @@ final class UploadCommand extends AbstractSyncCommand
         // differing in content (written under the existing remote name to avoid
         // normalization duplicates).
         $items = [];
+        $mkdirs = []; // remote directories to create (incl. empty ones)
         foreach ($comparison->localOnly as $e) {
-            $items[] = new TransferItem($e->path, $e->path, $e->size);
+            if ($e->isDir()) {
+                $mkdirs[] = $e->path;
+            } else {
+                $items[] = new TransferItem($e->path, $e->path, $e->size);
+            }
         }
         foreach ($comparison->modified as $pair) {
             $items[] = new TransferItem($pair['local']->path, $pair['remote']->path, $pair['local']->size);
@@ -67,28 +72,59 @@ final class UploadCommand extends AbstractSyncCommand
             }
         }
 
-        if ($items === [] && $toDelete === []) {
+        $this->reportConflicts($output, $comparison->conflict);
+
+        if ($items === [] && $mkdirs === [] && $toDelete === []) {
             $io->success('Nothing to upload – the server is in sync.');
             if ($protectedCount > 0) {
                 $io->note("$protectedCount files are extra but protected by the protect-list.");
             }
-            return Command::SUCCESS;
+            return $comparison->conflict === [] ? Command::SUCCESS : Command::FAILURE;
         }
 
         if ((bool) $input->getOption('dry-run')) {
+            foreach ($mkdirs as $rel) {
+                $output->writeln("<fg=green>↑ $rel/</>");
+            }
             foreach ($items as $item) {
                 $output->writeln("<fg=green>↑ {$item->targetPath}</>");
             }
             foreach ($toDelete as $rel) {
                 $output->writeln("<fg=red>␡ $rel</>");
             }
-            $io->note(sprintf('dry run: %d to upload, %d to delete.', count($items), count($toDelete)));
+            $io->note(sprintf(
+                'dry run: %d dirs to create, %d to upload, %d to delete.',
+                count($mkdirs),
+                count($items),
+                count($toDelete),
+            ));
             return Command::SUCCESS;
         }
 
-        $uploader = new Uploader($http, $config->localRoot, $caps, $config->compress, $config->compressSkipExt);
         $ok = 0;
         $fail = 0;
+        $created = 0;
+
+        // Create directories first so empty ones exist regardless of file outcomes
+        // (file uploads also mkdir -p their parents, but empty dirs need this).
+        if ($mkdirs !== []) {
+            $paths = array_map(Wire::encPath(...), $mkdirs);
+            foreach ($http->postJson(Protocol::ACTION_MKDIR, ['paths' => $paths]) as $r) {
+                if (!isset($r['p'])) {
+                    continue;
+                }
+                $rel = Wire::decPath((string) $r['p']);
+                if (($r['ok'] ?? false) === true) {
+                    $created++;
+                    $output->writeln("<fg=green>↑ $rel/</>");
+                } else {
+                    $fail++;
+                    $output->writeln("<fg=red>✗ mkdir $rel/</> <fg=gray>(" . (string) ($r['err'] ?? '?') . ")</>");
+                }
+            }
+        }
+
+        $uploader = new Uploader($http, $config->localRoot, $caps, $config->compress, $config->compressSkipExt);
         $uploader->upload($items, static function (string $rel, bool $success, ?string $err) use ($output, &$ok, &$fail): void {
             if ($success) {
                 $ok++;
@@ -118,7 +154,13 @@ final class UploadCommand extends AbstractSyncCommand
         }
 
         $io->newLine();
-        $io->writeln(sprintf('<info>Uploaded %d, deleted %d, errors %d.</info>', $ok, $deleted, $fail));
+        $io->writeln(sprintf(
+            '<info>Created %d dirs, uploaded %d, deleted %d, errors %d.</info>',
+            $created,
+            $ok,
+            $deleted,
+            $fail,
+        ));
         if ($protectedCount > 0) {
             $io->note("$protectedCount extra files kept (protect-list).");
         }

@@ -53,7 +53,7 @@ use Throwable;
 
 $CONFIG = [
     'publicKey'       => 'PSYNC_PUBLICKEY_PLACEHOLDER', // base64 of the public key
-    'protocolVersion' => 1,
+    'protocolVersion' => 2,
     'root'            => __DIR__,                       // remote root = agent's directory
     'protect'         => [/* PSYNC_PROTECT */],         // glob patterns that are never deleted
 ];
@@ -349,6 +349,9 @@ function dispatch(array $CONFIG, string $action, $body): void
         case 'delete':
             handle_delete($CONFIG, json_body($body));
             return;
+        case 'mkdir':
+            handle_mkdir($CONFIG, json_body($body));
+            return;
         default:
             throw new AgentError("Unknown action: '$action'.", 400);
     }
@@ -553,6 +556,48 @@ function path_matches_any(string $rel, array $patterns): bool
         }
     }
     return false;
+}
+
+
+// ===========================================================================
+// Handler: mkdir
+// ===========================================================================
+
+/**
+ * Input: {paths:[base64]}. Creates each directory (recursively, parents too).
+ * Idempotent: an already-existing directory counts as success. NDJSON output:
+ * {p, ok, err}. Directories carry no content, so this is a plain JSON action
+ * (no binary framing).
+ */
+function handle_mkdir(array $CONFIG, array $req): void
+{
+    $root = $CONFIG['root'];
+    $paths = isset($req['paths']) && is_array($req['paths']) ? $req['paths'] : [];
+
+    header('Content-Type: application/x-ndjson; charset=utf-8');
+
+    foreach ($paths as $p64) {
+        $rel = base64_decode((string) $p64, true);
+        if ($rel === false) {
+            continue;
+        }
+        $abs = resolve_scope($root, $rel);
+        if ($abs === null) {
+            emit(['p' => $p64, 'ok' => false, 'err' => 'path outside scope']);
+            continue;
+        }
+        if (is_dir($abs)) {
+            emit(['p' => $p64, 'ok' => true]); // already there = goal met
+            continue;
+        }
+        if (file_exists($abs)) {
+            emit(['p' => $p64, 'ok' => false, 'err' => 'a file exists at this path']);
+            continue;
+        }
+        $ok = @mkdir($abs, 0775, true) || is_dir($abs);
+        emit(['p' => $p64, 'ok' => $ok, 'err' => $ok ? null : 'cannot create directory']);
+    }
+    emit(['end' => true]);
 }
 
 

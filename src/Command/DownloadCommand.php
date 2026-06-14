@@ -44,8 +44,13 @@ final class DownloadCommand extends AbstractSyncCommand
         // differing in content (written under the existing local name to avoid
         // normalization duplicates).
         $items = [];
+        $mkdirs = []; // local directories to create (incl. empty ones)
         foreach ($comparison->remoteOnly as $e) {
-            $items[] = new TransferItem($e->path, $e->path, $e->size);
+            if ($e->isDir()) {
+                $mkdirs[] = $e->path;
+            } else {
+                $items[] = new TransferItem($e->path, $e->path, $e->size);
+            }
         }
         foreach ($comparison->modified as $pair) {
             $items[] = new TransferItem($pair['remote']->path, $pair['local']->path, $pair['remote']->size);
@@ -65,28 +70,53 @@ final class DownloadCommand extends AbstractSyncCommand
             }
         }
 
-        if ($items === [] && $toDelete === []) {
+        $this->reportConflicts($output, $comparison->conflict);
+
+        if ($items === [] && $mkdirs === [] && $toDelete === []) {
             $io->success('Nothing to download – the local copy is in sync.');
             if ($protectedCount > 0) {
                 $io->note("$protectedCount local files are extra but protected by the protect-list.");
             }
-            return Command::SUCCESS;
+            return $comparison->conflict === [] ? Command::SUCCESS : Command::FAILURE;
         }
 
         if ((bool) $input->getOption('dry-run')) {
+            foreach ($mkdirs as $rel) {
+                $output->writeln("<fg=green>↓ $rel/</>");
+            }
             foreach ($items as $item) {
                 $output->writeln("<fg=green>↓ {$item->targetPath}</>");
             }
             foreach ($toDelete as $rel) {
                 $output->writeln("<fg=red>␡ $rel</>");
             }
-            $io->note(sprintf('dry run: %d to download, %d to delete locally.', count($items), count($toDelete)));
+            $io->note(sprintf(
+                'dry run: %d dirs to create, %d to download, %d to delete locally.',
+                count($mkdirs),
+                count($items),
+                count($toDelete),
+            ));
             return Command::SUCCESS;
         }
 
-        $downloader = new Downloader($http, $config->localRoot, $config->compress, $config->compressSkipExt);
         $ok = 0;
         $fail = 0;
+        $created = 0;
+
+        // Create local directories first so empty ones exist regardless of file
+        // outcomes (file writes also mkdir -p their parents).
+        foreach ($mkdirs as $rel) {
+            $abs = $config->localRoot . '/' . $rel;
+            if (is_dir($abs) || @mkdir($abs, 0775, true) || is_dir($abs)) {
+                $created++;
+                $output->writeln("<fg=green>↓ $rel/</>");
+            } else {
+                $fail++;
+                $output->writeln("<fg=red>✗ mkdir $rel/</>");
+            }
+        }
+
+        $downloader = new Downloader($http, $config->localRoot, $config->compress, $config->compressSkipExt);
         $downloader->download($items, static function (string $rel, bool $success, ?string $err) use ($output, &$ok, &$fail): void {
             if ($success) {
                 $ok++;
@@ -110,7 +140,13 @@ final class DownloadCommand extends AbstractSyncCommand
         }
 
         $io->newLine();
-        $io->writeln(sprintf('<info>Downloaded %d, deleted %d, errors %d.</info>', $ok, $deleted, $fail));
+        $io->writeln(sprintf(
+            '<info>Created %d dirs, downloaded %d, deleted %d, errors %d.</info>',
+            $created,
+            $ok,
+            $deleted,
+            $fail,
+        ));
         if ($protectedCount > 0) {
             $io->note("$protectedCount extra files kept (protect-list).");
         }

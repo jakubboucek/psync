@@ -9,6 +9,7 @@ use JakubBoucek\Psync\Console\Reporter;
 use JakubBoucek\Psync\Protocol\Signer;
 use JakubBoucek\Psync\State\StateCache;
 use JakubBoucek\Psync\Sync\Comparator;
+use JakubBoucek\Psync\Sync\FileEntry;
 use JakubBoucek\Psync\Sync\IgnoreMatcher;
 use JakubBoucek\Psync\Sync\Walker;
 use JakubBoucek\Psync\Transport\HttpClient;
@@ -16,6 +17,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * Shared base for commands that work with the config and a relative path (scope).
@@ -104,6 +106,25 @@ abstract class AbstractSyncCommand extends Command
     protected function buildProtect(Config $config): IgnoreMatcher
     {
         return new IgnoreMatcher($config->protect);
+    }
+
+    /**
+     * Prints a warning for each file-vs-directory type conflict. These are never
+     * auto-resolved (it would be destructive) and are skipped from the transfer;
+     * the user resolves them manually.
+     *
+     * @param array<string, array{local: FileEntry, remote: FileEntry}> $conflict
+     */
+    protected function reportConflicts(OutputInterface $output, array $conflict): void
+    {
+        foreach ($conflict as $rel => $pair) {
+            $output->writeln(sprintf(
+                '<fg=magenta>! type conflict: %s</> <fg=gray>(local %s / remote %s – skipped, resolve manually)</>',
+                $rel,
+                $pair['local']->isDir() ? 'dir' : 'file',
+                $pair['remote']->isDir() ? 'dir' : 'file',
+            ));
+        }
     }
 
     protected function buildComparator(Config $config, InputInterface $input, HttpClient $http, ?Reporter $reporter = null): Comparator
