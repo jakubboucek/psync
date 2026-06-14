@@ -9,7 +9,7 @@ use RuntimeException;
 /**
  * Renders the server agent from a template – fills in the public key and protect-list.
  */
-final class AgentBuilder
+final readonly class AgentBuilder
 {
     private string $templatePath;
 

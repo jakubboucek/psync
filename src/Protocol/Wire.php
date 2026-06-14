@@ -25,7 +25,7 @@ use RuntimeException;
 final class Wire
 {
     /** Length of the fixed header part after the path: flags(1)+mtime(8)+origSize(8)+payloadLen(8)+md5(16). */
-    private const HEADER_FIXED = 41;
+    private const int HEADER_FIXED = 41;
 
     // --- NDJSON -----------------------------------------------------------
 

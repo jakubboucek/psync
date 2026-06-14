@@ -21,9 +21,9 @@ use RuntimeException;
  * signature thus covers body integrity even for binary (upload) requests,
  * without keeping the whole body in memory for signing.
  */
-final class Signer
+final readonly class Signer
 {
-    private readonly string $secretKey;
+    private string $secretKey;
 
     public function __construct(string $privateKeyBase64)
     {

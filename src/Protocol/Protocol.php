@@ -18,27 +18,27 @@ final class Protocol
      * client also hard-fails up front from `capabilities`. A bump therefore
      * forces a re-`install` of the agent.
      */
-    public const VERSION = 1;
+    public const int VERSION = 1;
 
-    public const HEADER_VERSION = 'X-Sync-Version';
-    public const HEADER_TS = 'X-Sync-Ts';
-    public const HEADER_NONCE = 'X-Sync-Nonce';
-    public const HEADER_SIG = 'X-Sync-Sig';
-    public const HEADER_ACTION = 'X-Sync-Action';
+    public const string HEADER_VERSION = 'X-Sync-Version';
+    public const string HEADER_TS = 'X-Sync-Ts';
+    public const string HEADER_NONCE = 'X-Sync-Nonce';
+    public const string HEADER_SIG = 'X-Sync-Sig';
+    public const string HEADER_ACTION = 'X-Sync-Action';
 
-    public const ACTION_CAPABILITIES = 'capabilities';
-    public const ACTION_LIST = 'list';
-    public const ACTION_HASH = 'hash';
-    public const ACTION_DOWNLOAD = 'download';
-    public const ACTION_UPLOAD = 'upload';
-    public const ACTION_DELETE = 'delete';
+    public const string ACTION_CAPABILITIES = 'capabilities';
+    public const string ACTION_LIST = 'list';
+    public const string ACTION_HASH = 'hash';
+    public const string ACTION_DOWNLOAD = 'download';
+    public const string ACTION_UPLOAD = 'upload';
+    public const string ACTION_DELETE = 'delete';
 
     /** Maximum allowed client↔server time difference (s) due to the replay window. */
-    public const TIME_WINDOW = 300;
+    public const int TIME_WINDOW = 300;
 
     /** Flag in the binary frame: the payload is gzipped. */
-    public const FLAG_GZIP = 0b0000_0001;
+    public const int FLAG_GZIP = 0b0000_0001;
 
     /** Hashing algorithm for change detection (not for security). */
-    public const HASH_ALGO = 'md5';
+    public const string HASH_ALGO = 'md5';
 }

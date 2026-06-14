@@ -47,7 +47,7 @@ final class InstallCommand extends Command
         $protect = $this->readProtect($configPath);
 
         $pair = Signer::generateKeyPair();
-        $agent = (new AgentBuilder())->build($pair['public'], $protect);
+        $agent = new AgentBuilder()->build($pair['public'], $protect);
 
         if (file_put_contents($agentPath, $agent) === false) {
             $io->error("Unable to write the agent to '$agentPath'.");
@@ -84,7 +84,7 @@ final class InstallCommand extends Command
         if (!is_array($raw) || !isset($raw['protect']) || !is_array($raw['protect'])) {
             return [];
         }
-        return array_values(array_map('strval', $raw['protect']));
+        return array_values(array_map(strval(...), $raw['protect']));
     }
 
     private function configTemplate(string $privateKey, string $agentFile): string

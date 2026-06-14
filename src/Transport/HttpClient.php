@@ -16,7 +16,7 @@ use RuntimeException;
  */
 final class HttpClient
 {
-    private const VERSION_MISMATCH = 'Protocol version mismatch: the agent rejected the request. '
+    private const string VERSION_MISMATCH = 'Protocol version mismatch: the agent rejected the request. '
         . 'Regenerate the agent with `psync install` and re-upload it.';
 
     private int $timeOffset = 0;

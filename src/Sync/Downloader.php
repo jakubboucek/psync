@@ -14,21 +14,21 @@ use RuntimeException;
  * request; received frames are written atomically (tmp + rename) with the source
  * mtime applied. An unfinished batch (crash) is re-requested on the next run - resumable.
  */
-final class Downloader
+final readonly class Downloader
 {
     /** Batch cap by total size (so the request stays within the server's limit). */
     private const BATCH_BYTES = 64 * 1024 * 1024;
-    private const BATCH_FILES = 1000;
+    private const int BATCH_FILES = 1000;
     private const CHUNK = 1 << 16;
 
     /**
      * @param list<string> $skipExt
      */
     public function __construct(
-        private readonly HttpClient $http,
-        private readonly string $localRoot,
-        private readonly bool $compress,
-        private readonly array $skipExt,
+        private HttpClient $http,
+        private string $localRoot,
+        private bool $compress,
+        private array $skipExt,
     ) {
     }
 

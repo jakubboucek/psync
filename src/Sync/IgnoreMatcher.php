@@ -12,22 +12,17 @@ namespace JakubBoucek\Psync\Sync;
  *  - a pattern without '/' matches the basename or any path segment: '*.log', '.git'
  *  - supports glob (fnmatch): '*', '?', '[...]'
  */
-final class IgnoreMatcher
+final readonly class IgnoreMatcher
 {
     /** @param list<string> $patterns */
-    public function __construct(private readonly array $patterns)
+    public function __construct(private array $patterns)
     {
     }
 
     public function matches(string $rel): bool
     {
         $rel = ltrim(str_replace('\\', '/', $rel), '/');
-        foreach ($this->patterns as $pattern) {
-            if ($this->matchOne(trim($pattern), $rel)) {
-                return true;
-            }
-        }
-        return false;
+        return array_any($this->patterns, fn($pattern) => $this->matchOne(trim((string) $pattern), $rel));
     }
 
     public function isEmpty(): bool
@@ -53,11 +48,6 @@ final class IgnoreMatcher
         if (fnmatch($pattern, basename($rel))) {
             return true;
         }
-        foreach (explode('/', $rel) as $segment) {
-            if (fnmatch($pattern, $segment)) {
-                return true;
-            }
-        }
-        return false;
+        return array_any(explode('/', $rel), fn($segment) => fnmatch($pattern, $segment));
     }
 }

@@ -21,6 +21,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  */
 final class UploadCommand extends AbstractSyncCommand
 {
+    #[\Override]
     protected function configure(): void
     {
         parent::configure();
@@ -100,7 +101,7 @@ final class UploadCommand extends AbstractSyncCommand
 
         $deleted = 0;
         if ($toDelete !== []) {
-            $paths = array_map(static fn(string $r): string => Wire::encPath($r), $toDelete);
+            $paths = array_map(Wire::encPath(...), $toDelete);
             foreach ($http->postJson(Protocol::ACTION_DELETE, ['paths' => $paths]) as $r) {
                 if (!isset($r['p'])) {
                     continue;

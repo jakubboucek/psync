@@ -22,6 +22,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  */
 final class CompareCommand extends AbstractSyncCommand
 {
+    #[\Override]
     protected function configure(): void
     {
         parent::configure();

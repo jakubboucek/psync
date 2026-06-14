@@ -23,7 +23,7 @@ use Symfony\Component\Console\Input\InputOption;
 abstract class AbstractSyncCommand extends Command
 {
     /** Local state cache – never synchronized. */
-    private const STATE_FILE = '.psync-state.json';
+    private const string STATE_FILE = '.psync-state.json';
 
     protected function configure(): void
     {

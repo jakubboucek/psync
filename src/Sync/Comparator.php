@@ -18,20 +18,20 @@ use JakubBoucek\Psync\Transport\HttpClient;
  * The state cache allows skipping the hashing of files whose metadata has not
  * changed since the last check. The --checksum mode ignores both the cache and mtime.
  */
-final class Comparator
+final readonly class Comparator
 {
     /** Batch cap for server hashing: total size (100 MB) and file count. */
     private const HASH_BATCH_BYTES = 100 * 1024 * 1024;
-    private const HASH_BATCH_FILES = 1000;
+    private const int HASH_BATCH_FILES = 1000;
 
     public function __construct(
-        private readonly HttpClient $http,
-        private readonly Walker $walker,
-        private readonly IgnoreMatcher $ignore,
-        private readonly StateCache $cache,
-        private readonly string $localRoot,
-        private readonly bool $checksum = false,
-        private readonly ?Reporter $reporter = null,
+        private HttpClient $http,
+        private Walker $walker,
+        private IgnoreMatcher $ignore,
+        private StateCache $cache,
+        private string $localRoot,
+        private bool $checksum = false,
+        private ?Reporter $reporter = null,
     ) {
     }
 

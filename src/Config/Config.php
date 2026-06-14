@@ -12,16 +12,16 @@ use RuntimeException;
  * The rich config (local↔remote mapping, ignore, protect) lives on the client;
  * the server agent only knows its public key, remote root and protect-list.
  */
-final class Config
+final readonly class Config
 {
     /** @var list<string> */
-    public readonly array $ignore;
+    public array $ignore;
 
     /** @var list<string> */
-    public readonly array $protect;
+    public array $protect;
 
     /** @var list<string> */
-    public readonly array $compressSkipExt;
+    public array $compressSkipExt;
 
     /**
      * @param mixed[] $ignore
@@ -29,20 +29,20 @@ final class Config
      * @param mixed[] $compressSkipExt
      */
     public function __construct(
-        public readonly string $url,
-        public readonly ?string $privateKey,
-        public readonly string $localRoot,
-        public readonly string $remoteRoot,
+        public string $url,
+        public ?string $privateKey,
+        public string $localRoot,
+        public string $remoteRoot,
         array $ignore = [],
         array $protect = [],
-        public readonly bool $checksum = false,
-        public readonly bool $compress = true,
+        public bool $checksum = false,
+        public bool $compress = true,
         array $compressSkipExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'zip', 'gz', 'pdf', 'mp4', 'mp3'],
-        public readonly bool $serverGzipWorkaround = false,
-        public readonly ?string $configPath = null,
+        public bool $serverGzipWorkaround = false,
+        public ?string $configPath = null,
     ) {
-        $this->ignore = array_values(array_map('strval', $ignore));
-        $this->protect = array_values(array_map('strval', $protect));
+        $this->ignore = array_values(array_map(strval(...), $ignore));
+        $this->protect = array_values(array_map(strval(...), $protect));
         $this->compressSkipExt = array_values(array_map(
             static fn($e): string => strtolower(ltrim((string) $e, '.')),
             $compressSkipExt,

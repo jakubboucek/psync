@@ -15,12 +15,12 @@ namespace JakubBoucek\Psync\Sync;
  *  - download: source = remote path, target = local path
  * For brand-new files both paths are identical.
  */
-final class TransferItem
+final readonly class TransferItem
 {
     public function __construct(
-        public readonly string $sourcePath,
-        public readonly string $targetPath,
-        public readonly int $size,
+        public string $sourcePath,
+        public string $targetPath,
+        public int $size,
     ) {
     }
 }

@@ -13,7 +13,7 @@ use JakubBoucek\Psync\Transport\HttpClient;
  * limited by the server's actual post_max_size (from capabilities) - the request
  * body must not exceed it. Each batch is a separate request → resumable.
  */
-final class Uploader
+final readonly class Uploader
 {
     /** Reserve below post_max_size for headers etc. */
     private const MARGIN = 16 * 1024;
@@ -28,11 +28,11 @@ final class Uploader
      * @param list<string> $skipExt
      */
     public function __construct(
-        private readonly HttpClient $http,
-        private readonly string $localRoot,
+        private HttpClient $http,
+        private string $localRoot,
         array $caps,
-        private readonly bool $compress,
-        private readonly array $skipExt,
+        private bool $compress,
+        private array $skipExt,
     ) {
         $post = (int) ($caps['postMaxSize'] ?? 0);
         $this->limit = $post > 0 ? max(self::MARGIN * 2, $post - self::MARGIN) : self::DEFAULT_LIMIT;

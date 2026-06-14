@@ -17,8 +17,8 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 final class Reporter
 {
-    private OutputInterface $err;
-    private bool $live;
+    private readonly OutputInterface $err;
+    private readonly bool $live;
     private string $label = '';
     private bool $active = false;
     private int $lastLen = 0;

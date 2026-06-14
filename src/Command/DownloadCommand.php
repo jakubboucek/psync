@@ -19,6 +19,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  */
 final class DownloadCommand extends AbstractSyncCommand
 {
+    #[\Override]
     protected function configure(): void
     {
         parent::configure();

@@ -8,11 +8,11 @@ namespace JakubBoucek\Psync\Sync;
  * Local recursive file traversal - mirrors the agent's behavior (deterministic,
  * does not follow symlinks), and additionally applies ignore patterns.
  */
-final class Walker
+final readonly class Walker
 {
-    private readonly string $root;
+    private string $root;
 
-    public function __construct(string $root, private readonly IgnoreMatcher $ignore)
+    public function __construct(string $root, private IgnoreMatcher $ignore)
     {
         $this->root = rtrim($root, '/');
     }
