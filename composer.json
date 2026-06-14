@@ -1,8 +1,8 @@
 {
     "name": "jakubboucek/psync",
     "description": "A tool for automated deploy/download of PHP applications source code between local PC and dummy webhosting.",
-    "type": "library",
     "license": "MIT",
+    "type": "library",
     "authors": [
         {
             "name": "Jakub Bouček",
@@ -16,6 +16,12 @@
         "ext-sodium": "*",
         "ext-zlib": "*",
         "symfony/console": "^7.1"
+    },
+    "require-dev": {
+        "nette/tester": "^2.5",
+        "php-parallel-lint/php-parallel-lint": "^1.4",
+        "phpstan/phpstan": "^2.2",
+        "phpstan/phpstan-strict-rules": "^2.0"
     },
     "suggest": {
         "ext-intl": "Unicode path normalization (NFC/NFD) so accented filenames match across macOS (NFD) and Linux (NFC) servers"
@@ -31,20 +37,14 @@
     "config": {
         "sort-packages": true
     },
-    "require-dev": {
-        "nette/tester": "^2.5",
-        "php-parallel-lint/php-parallel-lint": "^1.4",
-        "phpstan/phpstan": "^2.2",
-        "phpstan/phpstan-strict-rules": "^2.0"
-    },
     "scripts": {
-        "lint": "parallel-lint -e php,phpt src bin agent tests",
-        "phpstan": "phpstan analyse --memory-limit=512M",
-        "tester": "tester -C tests/Unit",
         "check": [
             "@lint",
             "@phpstan",
             "@tester"
-        ]
+        ],
+        "lint": "parallel-lint -e php,phpt src bin agent tests",
+        "phpstan": "phpstan analyse --memory-limit=512M",
+        "tester": "tester -C tests/Unit"
     }
 }
