@@ -39,6 +39,7 @@ final class Config
         public readonly bool $compress = true,
         array $compressSkipExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'zip', 'gz', 'pdf', 'mp4', 'mp3'],
         public readonly bool $serverGzipWorkaround = false,
+        public readonly ?string $configPath = null,
     ) {
         $this->ignore = array_values(array_map('strval', $ignore));
         $this->protect = array_values(array_map('strval', $protect));
@@ -79,6 +80,8 @@ final class Config
             throw new RuntimeException("mapping.local does not exist or is not a directory: $local");
         }
 
+        $configReal = realpath($path);
+
         return new self(
             url: (string) $require('url'),
             privateKey: isset($data['privateKey']) ? (string) $data['privateKey'] : null,
@@ -91,6 +94,7 @@ final class Config
             compressSkipExt: (array) ($data['compressSkipExt']
                 ?? ['jpg', 'jpeg', 'png', 'gif', 'webp', 'zip', 'gz', 'pdf', 'mp4', 'mp3']),
             serverGzipWorkaround: (bool) ($data['serverGzipWorkaround'] ?? false),
+            configPath: $configReal !== false ? $configReal : $path,
         );
     }
 

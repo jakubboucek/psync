@@ -66,13 +66,36 @@ abstract class AbstractSyncCommand extends Command
     }
 
     /**
-     * Builds the ignore matcher and additionally never synchronizes the state cache.
+     * Builds the ignore matcher and additionally never synchronizes the state
+     * cache, nor the config file itself (it holds the private key) – regardless
+     * of how it was named or located via --config.
      */
     protected function buildIgnore(Config $config): IgnoreMatcher
     {
         $patterns = $config->ignore;
         $patterns[] = '/' . self::STATE_FILE;
+
+        $configRel = $this->relativeToRoot($config->configPath, $config->localRoot);
+        if ($configRel !== null) {
+            $patterns[] = '/' . $configRel;
+        }
+
         return new IgnoreMatcher($patterns);
+    }
+
+    /**
+     * If $path is inside $root, returns its path relative to $root; otherwise null
+     * (a file outside the synced tree is never walked, so it needs no ignore).
+     */
+    private function relativeToRoot(?string $path, string $root): ?string
+    {
+        if ($path === null) {
+            return null;
+        }
+        $prefix = rtrim($root, '/') . '/';
+        return str_starts_with($path, $prefix)
+            ? substr($path, strlen($prefix))
+            : null;
     }
 
     /**

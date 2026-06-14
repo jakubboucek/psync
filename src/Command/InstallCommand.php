@@ -102,7 +102,7 @@ final class InstallCommand extends Command
                 'local'  => __DIR__, // <--- complete path to the local website root
                 'remote' => '/',
             ],
-            'ignore'     => ['/.git', '/.psync.php', '*.log', '/temp', '/uploads'],
+            'ignore'     => ['/.git', '*.log', '/temp', '/uploads'],
             'protect'    => ['/uploads', '/temp'],
             'checksum'   => false,
             'compress'   => true,

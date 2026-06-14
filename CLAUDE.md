@@ -46,6 +46,10 @@ documentation is in [README.md](README.md); here are the things important for ed
 
 - **2-phase comparison** (`Comparator`): listing → candidates (identical size, different mtime) →
   md5 (locally + in batches on the server, ≤100 MB/≤1000). `--checksum` hashes everything.
+- **Auto-ignored, never uploaded** (`AbstractSyncCommand::buildIgnore`): the state cache
+  (`.psync-state.json`) and the **config file itself** (it holds the private key) — the config is ignored
+  by its real path relative to `localRoot`, regardless of how `--config` named/located it, so the key
+  can't leak even with a renamed/relocated config.
 - **StateCache** (`.psync-state.json` in the local root, auto-ignored): key `base64(rel)`,
   the equality verdict is reused only when the local size+mtime and the remote mtime match. This way a
   file that only has a differing mtime (FTP clock mismatch) is not hashed repeatedly.

@@ -63,7 +63,7 @@ return [
         'local' => __DIR__,                      // complete path to the local website root
         'remote' => '/'
     ],
-    'ignore'     => ['/.git', '/.psync.php', '*.log', '/temp', '/uploads'],
+    'ignore'     => ['/.git', '*.log', '/temp', '/uploads'],
     'protect'    => ['/uploads', '/temp'],       // never deleted
     'checksum'   => false,                       // like rsync -c
     'compress'   => true,                        // GZ during transfer
