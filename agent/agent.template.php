@@ -998,7 +998,11 @@ function send_error(int $code, string $msg): void
 {
     if (!headers_sent()) {
         http_response_code($code);
-        header('Content-Type: application/x-ndjson; charset=utf-8');
+        // application/json (not x-ndjson): a stand-alone error is a single JSON
+        // object, so browsers render it when the page is opened directly. When an
+        // error occurs mid-stream the headers are already sent, this is skipped,
+        // and the error line is appended to the existing NDJSON response instead.
+        header('Content-Type: application/json; charset=utf-8');
     }
     try {
         $json = json_encode(['error' => $msg, 'code' => $code], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
