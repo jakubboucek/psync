@@ -12,6 +12,7 @@
     "require": {
         "php": ">=8.4",
         "ext-curl": "*",
+        "ext-json": "*",
         "ext-sodium": "*",
         "ext-zlib": "*",
         "symfony/console": "^7.1"
