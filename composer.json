@@ -1,6 +1,6 @@
 {
     "name": "jakubboucek/psync",
-    "description": "A tool for automated deploy/download of PHP applications source code between local PC and dummy webhosting.",
+    "description": "A tool for automated deploy/download of PHP applications source code between local PC and crappy webhosting.",
     "license": "MIT",
     "type": "library",
     "authors": [

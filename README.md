@@ -1,6 +1,6 @@
-# PHP sync (rsync for PHP) tool for dummy webhostings
+# PHP sync (rsync for PHP) tool for crappy webhostings
 
-*A tool for automated deploy/download of PHP applications source code between local PC and dummy webhosting.*
+*A tool for automated deploy/download of PHP applications source code between local PC and crappy webhosting.*
 
 There is nothing worse than babysitting a PHP application on a hosting that, in this day and age, still
 speaks nothing but FTP. No SSH, no rsync, no Git deploy — just a lonely FTP port and your patience.
@@ -8,7 +8,7 @@ You drag files in Total Commander, never quite sure what is *actually* on the se
 need to pull a changed file back *down* to compare it… good luck. (Editing straight on the server and
 then trying to keep things in sync is, of course, even worse ;-)
 
-**psync** is rsync for exactly these dummy webhostings. You upload one small PHP file (the *agent*) over
+**psync** is rsync for exactly these crappy webhostings. You upload one small PHP file (the *agent*) over
 FTP once, and from then on you drive it over HTTP from your machine. Unlike one-way FTP deployers, psync
 is **bidirectional**: it can `compare` both sides, `upload` your local changes, and `download` whatever
 got changed on the server — even for applications with tens of thousands of files, and while politely
