@@ -3,12 +3,30 @@
     "description": "A tool for automated deploy/download of PHP applications source code between local PC and crappy webhosting.",
     "license": "MIT",
     "type": "library",
+    "keywords": [
+        "deploy",
+        "deployment",
+        "download",
+        "ftp",
+        "rsync",
+        "shared hosting",
+        "sync",
+        "synchronization",
+        "upload"
+    ],
     "authors": [
         {
             "name": "Jakub Bouček",
-            "email": "pan@jakubboucek.cz"
+            "email": "pan@jakubboucek.cz",
+            "homepage": "https://www.jakub-boucek.cz",
+            "role": "Developer"
         }
     ],
+    "homepage": "https://github.com/jakubboucek/psync",
+    "support": {
+        "issues": "https://github.com/jakubboucek/psync/issues",
+        "source": "https://github.com/jakubboucek/psync"
+    },
     "require": {
         "php": ">=8.4",
         "ext-curl": "*",
