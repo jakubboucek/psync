@@ -27,6 +27,11 @@ documentation is in [README.md](README.md); here are the things important for ed
 - **Ed25519 signature** over the canonical message `action ⧺ ts ⧺ nonce ⧺ sha256(body)`
   (`Signer::canonical` on the client, mirrored by hand in the agent's `authenticate()`).
   **When you change this message, update BOTH sides and bump `Protocol::VERSION`.**
+- **Version enforcement**: the client sends `X-Sync-Version` on every request; the agent rejects a
+  missing/mismatched version with **HTTP 426 before auth** (`check_protocol_version`), except
+  `capabilities` which stays exempt so the client can discover the agent's version. The client also
+  hard-fails up front in `HttpClient::capabilities()`. Version is **not** in the signature (a tampered
+  header only self-DoSes a MITM). A `Protocol::VERSION` bump therefore forces a re-`install`.
 - Endpoints: `capabilities`, `list`, `hash` (NDJSON), `download` (binary framing response),
   `upload` (binary framing body, NDJSON response), `delete` (NDJSON).
 

@@ -49,6 +49,7 @@ $CONFIG = array(
 // ---------------------------------------------------------------------------
 // Protocol constants (must match the client – JakubBoucek\Psync\Protocol\Protocol)
 // ---------------------------------------------------------------------------
+const HEADER_VERSION = 'X-Sync-Version';
 const HEADER_TS = 'X-Sync-Ts';
 const HEADER_NONCE = 'X-Sync-Nonce';
 const HEADER_SIG = 'X-Sync-Sig';
@@ -71,8 +72,17 @@ const CHUNK = 65536;
         // Upload has a binary body and the action in a header; JSON actions carry the action in the body.
         $actionHeader = header_value(HEADER_ACTION);
         $isUpload = ($actionHeader === 'upload');
+        // Enforce the protocol version before auth. Upload is gated up front so a
+        // wrong-version request never streams its (possibly large) body to disk.
+        // `capabilities` stays exempt so the client can discover the agent version.
+        if ($isUpload) {
+            check_protocol_version($CONFIG);
+        }
         $body = read_body($isUpload); // JSON action = string; upload = ['tmp' => path, 'sha256' => hex]
         $action = detect_action($actionHeader, $body);
+        if (!$isUpload && $action !== 'capabilities') {
+            check_protocol_version($CONFIG);
+        }
         authenticate($CONFIG, $action, $body);
         dispatch($CONFIG, $action, $body);
     } catch (AgentError $e) {
@@ -193,6 +203,23 @@ function read_body(bool $isUpload)
     // JSON action – the body is small.
     $raw = file_get_contents('php://input');
     return $raw === false ? '' : $raw;
+}
+
+/**
+ * Rejects the request (HTTP 426) if the client's X-Sync-Version header is missing
+ * or does not match the agent's baked-in protocol version. Checked before auth.
+ */
+function check_protocol_version(array $CONFIG): void
+{
+    $client = header_value(HEADER_VERSION);
+    if ($client === null || (int) $client !== (int) $CONFIG['protocolVersion']) {
+        throw new AgentError(sprintf(
+            'Protocol version mismatch: agent is v%d, client sent v%s. '
+                . 'Regenerate the agent with `psync install` and re-upload it.',
+            (int) $CONFIG['protocolVersion'],
+            $client === null ? '?' : $client
+        ), 426);
+    }
 }
 
 /**

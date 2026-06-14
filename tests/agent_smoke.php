@@ -59,13 +59,13 @@ if ($mode === 'check') {
     };
 
     /** Sends a signed JSON request, returns [httpCode, rawBody]. */
-    $call = static function (string $action, array $payload, ?Signer $s, ?string $forceSig = null) use ($url): array {
+    $call = static function (string $action, array $payload, ?Signer $s, ?string $forceSig = null, bool $omitVersion = false) use ($url): array {
         $body = json_encode(array_merge(['action' => $action], $payload));
         $headers = $s ? $s->headers($action, $body) : [];
         if ($forceSig !== null) {
             $headers[Protocol::HEADER_SIG] = $forceSig;
         }
-        $h = [];
+        $h = $omitVersion ? [] : [Protocol::HEADER_VERSION . ': ' . Protocol::VERSION];
         foreach ($headers as $k => $v) {
             $h[] = "$k: $v";
         }
@@ -96,6 +96,12 @@ if ($mode === 'check') {
     $assert($code === 403, "forged signature → 403 (got $code)");
     [$code] = $call('capabilities', [], null); // no signature
     $assert($code === 403, "no signature → 403 (got $code)");
+
+    echo "protocol version:\n";
+    [$code] = $call('list', ['path' => ''], $signer, null, true); // omit X-Sync-Version
+    $assert($code === 426, "list without X-Sync-Version → 426 (got $code)");
+    [$code] = $call('capabilities', [], $signer, null, true); // capabilities is exempt
+    $assert($code === 200, "capabilities exempt from version check → 200 (got $code)");
 
     echo "list:\n";
     [$code, $resp] = $call('list', ['path' => ''], $signer);
