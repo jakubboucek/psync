@@ -47,6 +47,7 @@ namespace JakubBoucek\Psync\Agent;
 // ---------------------------------------------------------------------------
 // Configuration (values filled in by `install`)
 // ---------------------------------------------------------------------------
+use JsonException;
 use RuntimeException;
 use Throwable;
 
@@ -167,7 +168,13 @@ function detect_action(?string $actionHeader, $body): string
         return $actionHeader;
     }
     if (is_string($body)) {
-        $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        try {
+            $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $e) {
+            // A malformed/empty body carries no action; let the version check
+            // (run after this) reject it with 426 rather than masking it as 500.
+            return '';
+        }
         if (is_array($data) && isset($data['action'])) {
             return (string) $data['action'];
         }
@@ -356,7 +363,11 @@ function json_body($body): array
     if (is_array($body)) {
         throw new AgentError('Unexpected binary body.', 400);
     }
-    $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+    try {
+        $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+    } catch (JsonException $e) {
+        throw new AgentError('Invalid JSON body.', 400);
+    }
     if (!is_array($data)) {
         throw new AgentError('Invalid JSON body.', 400);
     }
@@ -989,7 +1000,16 @@ function send_error(int $code, string $msg): void
         http_response_code($code);
         header('Content-Type: application/x-ndjson; charset=utf-8');
     }
-    echo json_encode(['error' => $msg, 'code' => $code], JSON_THROW_ON_ERROR) . "\n";
+    try {
+        $json = json_encode(['error' => $msg, 'code' => $code], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+    } catch (JsonException $e) {
+        $jsonExtmessage = $e->getMessage();
+        $json = json_encode([
+            'error' => "Internal error, unable to serialize error message to JSON, error: $jsonExtmessage",
+            'code' => 500
+        ], JSON_THROW_ON_ERROR);
+    }
+    echo $json . "\n";
     @flush();
 }
 
