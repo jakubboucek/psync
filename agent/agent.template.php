@@ -31,6 +31,11 @@
 
 declare(strict_types=1);
 
+// Own namespace so the agent's functions/constants do not pollute or clash with
+// the host project in an IDE (it runs as its own HTTP entry point). Built-in
+// functions and global constants fall back to global, so no prefixing is needed.
+namespace JakubBoucek\Psync\Agent;
+
 // ---------------------------------------------------------------------------
 // Configuration (values filled in by `install`)
 // ---------------------------------------------------------------------------

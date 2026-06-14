@@ -13,6 +13,10 @@ documentation is in [README.md](README.md); here are the things important for ed
   filename** `psync-agent-<nonce>.php` (6 hex chars via `random_bytes(3)`) so the URL can't be
   scanned for; pass `-o` to override. The template's header comment is an on-purpose reassurance for
   anyone auditing the site later (it's a maintenance tool, not a webshell; safe to delete) — keep it.
+  The agent lives in its own namespace `JakubBoucek\Psync\Agent` purely so its ~30 procedural
+  functions/constants don't pollute or clash (e.g. `handle_upload`) with a host project in an IDE; it
+  runs as its own HTTP entry point. Built-in functions and global constants fall back to global inside
+  a namespace, so the agent body stays unqualified (no prefixing needed).
 - The rich config (mapping, ignore) lives **on the client**; the agent only knows the public key, its own root
   (`__DIR__`), and the protect-list. That is why `install` is repeated only on key rotation / protocol change.
 
