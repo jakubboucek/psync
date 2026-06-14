@@ -100,3 +100,43 @@ documentation is in [README.md](README.md); here are the things important for ed
   otherwise the server may keep the old version for a while.
 - `tests/{local*,remote}/`, `tests/*.config.php`, and `tests/.smoke_priv` are in `.gitignore`
   (they contain generated content and private keys).
+
+## Verifying functionality (practical playbook)
+
+Static checks alone are not enough — exercise the real **client↔agent** path for any non-trivial change.
+The client is PHP 8.4 on the host; the agent only ever runs on real **PHP 7.4** (docker), never the host.
+
+**End-to-end via docker-compose** (server = real 7.4 + Apache, client = 8.4 CLI):
+```bash
+docker compose up -d
+# Host reaches the agent at http://localhost:8088/agent.php ;
+# the client *container* reaches it at http://server/agent.php (compose network).
+# A test config is a gitignored tests/*.config.php with url, privateKey, and
+# mapping.local = the CONTAINER path /app/tests/local (the repo is mounted at /app).
+docker compose exec -T client php bin/psync compare -c tests/<x>.config.php
+```
+- **Agent-only smoke**: `php tests/agent_smoke.php render tests/remote > tests/.smoke_priv` →
+  `docker compose restart server` (opcache!) → wait until `GET /agent.php` returns **any** HTTP status
+  (a bare GET is rejected — currently **426**, missing the version header, since the version is checked
+  before auth) → `php tests/agent_smoke.php check http://localhost:8088/agent.php "$(cat tests/.smoke_priv)"`.
+- After re-rendering the agent into `tests/remote` you MUST `docker compose restart server`, or opcache
+  serves the stale agent.
+
+**Gotchas that bite (learned the hard way):**
+- **Linting the agent is NOT enough.** `php -l` checks only syntax — it happily passes a PHP-8.0 function
+  (e.g. `str_starts_with`) that is undefined at runtime on 7.4. After ANY agent change also run
+  `docker run --rm -v "$PWD/agent:/a:ro" jakubboucek/lamp-devstack-php:7.4-legacy-cli php -l /a/agent.template.php`,
+  **grep the agent for 8.0 functions**, and run the smoke test on the 7.4 server. (This is why Rector for the
+  agent skips the `str_*` rules.)
+- **macOS can't create NFD / non-UTF8 filenames**, and the shell won't write raw bytes: `printf "…\xcc\x81…"`
+  in `sh` writes literal backslashes, and APFS may re-normalize. To test NFC/NFD or Windows-1250 names, create
+  files **inside the Linux container with PHP** (`php -r 'file_put_contents("/tmp/loc/Deni\xcc\x81k.txt", …)'`).
+  For full byte control with no mount/opcache surprises, run a self-contained scenario inside the client
+  container: render the agent to `/tmp/srv`, `php -S 127.0.0.1:9000 -t /tmp/srv &`, point a config at it.
+- **Progress and verbose logs go to STDERR**, the result to STDOUT. To see them, split streams (`1>out 2>err`)
+  and force `--ansi` (a non-TTY suppresses the live progress bar).
+- **Simulate a protocol-version mismatch**: render the agent, then
+  `perl -pi -e "s/'protocolVersion' => 1,/'protocolVersion' => 99,/" tests/remote/agent.php`, restart the
+  server → the client must hard-fail with the "regenerate the agent" message.
+- **Ignore PhpStorm-injected "phpstan … requires PHP >= 8.4.1 … running 8.2" errors** — that is
+  PhpStorm's bundled PHP; the real `composer check` / `vendor/bin/phpstan` runs on the host PHP 8.4.
