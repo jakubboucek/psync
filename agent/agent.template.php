@@ -1,4 +1,5 @@
 <?php
+
 /**
  * psync agent — https://github.com/jakubboucek/psync
  *
@@ -27,6 +28,13 @@
  * ───────────────────────────────────────────────────────────────────────────
  * GENERATED FILE — do not edit by hand; regenerate with `psync install`.
  * Target compatibility: PHP 7.4+ (no Composer dependencies, only ext-sodium).
+ * ───────────────────────────────────────────────────────────────────────────
+ * @noinspection AutoloadingIssuesInspection
+ * @noinspection PhpDocMissingThrowsInspection
+ * @noinspection PhpMissingParamTypeInspection
+ * @noinspection PhpMissingReturnTypeInspection
+ * @noinspection PhpMultipleClassDeclarationsInspection
+ * @noinspection PhpUnhandledExceptionInspection
  */
 
 declare(strict_types=1);
@@ -39,11 +47,14 @@ namespace JakubBoucek\Psync\Agent;
 // ---------------------------------------------------------------------------
 // Configuration (values filled in by `install`)
 // ---------------------------------------------------------------------------
+use RuntimeException;
+use Throwable;
+
 $CONFIG = [
     'publicKey'       => 'PSYNC_PUBLICKEY_PLACEHOLDER', // base64 of the public key
     'protocolVersion' => 1,
-    'root'            => __DIR__,                          // remote root = agent's directory
-    'protect'         => [/* PSYNC_PROTECT */],     // glob patterns that are never deleted
+    'root'            => __DIR__,                       // remote root = agent's directory
+    'protect'         => [/* PSYNC_PROTECT */],         // glob patterns that are never deleted
 ];
 
 // ---------------------------------------------------------------------------
@@ -65,7 +76,7 @@ const CHUNK = 65536;
     //  - zlib.output_compression is disabled by the agent at runtime
     // The client needs to know them (batching, server info).
     $CONFIG['_maxExecutionTime'] = (int) ini_get('max_execution_time');
-    $CONFIG['_zlibOutputCompression'] = ini_get('zlib.output_compression') ? true : false;
+    $CONFIG['_zlibOutputCompression'] = (bool)ini_get('zlib.output_compression');
     prepare_runtime();
 
     try {
@@ -87,7 +98,7 @@ const CHUNK = 65536;
         dispatch($CONFIG, $action, $body);
     } catch (AgentError $e) {
         send_error($e->getCode() ?: 400, $e->getMessage());
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         send_error(500, 'Internal agent error: ' . $e->getMessage());
     }
 })($CONFIG);
@@ -138,7 +149,7 @@ function set_time_limit_available(): bool
 // Request: action, body, authentication
 // ===========================================================================
 
-class AgentError extends \RuntimeException
+class AgentError extends RuntimeException
 {
 }
 
@@ -156,7 +167,7 @@ function detect_action(?string $actionHeader, $body): string
         return $actionHeader;
     }
     if (is_string($body)) {
-        $data = json_decode($body, true);
+        $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
         if (is_array($data) && isset($data['action'])) {
             return (string) $data['action'];
         }
@@ -345,7 +356,7 @@ function json_body($body): array
     if (is_array($body)) {
         throw new AgentError('Unexpected binary body.', 400);
     }
-    $data = json_decode($body, true);
+    $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
     if (!is_array($data)) {
         throw new AgentError('Invalid JSON body.', 400);
     }
@@ -375,7 +386,7 @@ function handle_capabilities(array $CONFIG): void
         'hashAlgos'             => array_values(array_intersect(['md5', 'sha1', 'crc32b'], hash_algos())),
         'zlibOutputCompression' => !empty($CONFIG['_zlibOutputCompression']),
     ];
-    echo json_encode($caps);
+    echo json_encode($caps, JSON_THROW_ON_ERROR);
 }
 
 
@@ -675,7 +686,7 @@ function write_upload_file(string $abs, $in, array $h)
     $remaining = $h['payloadLen'];
 
     while ($remaining > 0) {
-        $chunk = fread($in, $remaining < CHUNK ? $remaining : CHUNK);
+        $chunk = fread($in, min($remaining, CHUNK));
         if ($chunk === false || $chunk === '') {
             fclose($out);
             @unlink($tmp);
@@ -790,7 +801,7 @@ function stream_read_exact($in, int $n, bool $allowEof = false)
 function skip_bytes($in, int $n): void
 {
     while ($n > 0) {
-        $chunk = fread($in, $n < CHUNK ? $n : CHUNK);
+        $chunk = fread($in, min($n, CHUNK));
         if ($chunk === false || $chunk === '') {
             return;
         }
@@ -968,7 +979,7 @@ function ini_bytes(string $val): int
 
 function emit(array $obj): void
 {
-    echo json_encode($obj) . "\n";
+    echo json_encode($obj, JSON_THROW_ON_ERROR) . "\n";
     @flush();
 }
 
@@ -978,7 +989,7 @@ function send_error(int $code, string $msg): void
         http_response_code($code);
         header('Content-Type: application/x-ndjson; charset=utf-8');
     }
-    echo json_encode(['error' => $msg, 'code' => $code]) . "\n";
+    echo json_encode(['error' => $msg, 'code' => $code], JSON_THROW_ON_ERROR) . "\n";
     @flush();
 }
 
