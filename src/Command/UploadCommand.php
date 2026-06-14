@@ -7,6 +7,7 @@ namespace JakubBoucek\Psync\Command;
 use JakubBoucek\Psync\Console\Reporter;
 use JakubBoucek\Psync\Protocol\Protocol;
 use JakubBoucek\Psync\Protocol\Wire;
+use JakubBoucek\Psync\Sync\FileEntry;
 use JakubBoucek\Psync\Sync\TransferItem;
 use JakubBoucek\Psync\Sync\Uploader;
 use Symfony\Component\Console\Command\Command;
@@ -60,14 +61,15 @@ final class UploadCommand extends AbstractSyncCommand
 
         $delete = (bool) $input->getOption('delete');
         $protect = $this->buildProtect($config);
-        $toDelete = []; // remote original paths to delete
+        /** @var list<FileEntry> $toDelete remote entries to delete (files + dirs) */
+        $toDelete = [];
         $protectedCount = 0;
         if ($delete) {
             foreach ($comparison->remoteOnly as $rel => $e) {
                 if ($protect->matches($rel)) {
                     $protectedCount++;
                 } else {
-                    $toDelete[] = $e->path;
+                    $toDelete[] = $e;
                 }
             }
         }
@@ -89,8 +91,8 @@ final class UploadCommand extends AbstractSyncCommand
             foreach ($items as $item) {
                 $output->writeln("<fg=green>↑ {$item->targetPath}</>");
             }
-            foreach ($toDelete as $rel) {
-                $output->writeln("<fg=red>␡ $rel</>");
+            foreach ($toDelete as $e) {
+                $output->writeln('<fg=red>␡ ' . $e->path . ($e->isDir() ? '/' : '') . '</>');
             }
             $io->note(sprintf(
                 'dry run: %d dirs to create, %d to upload, %d to delete.',
@@ -137,7 +139,15 @@ final class UploadCommand extends AbstractSyncCommand
 
         $deleted = 0;
         if ($toDelete !== []) {
-            $paths = array_map(Wire::encPath(...), $toDelete);
+            // Deepest-first so a directory's contents are removed before the
+            // directory itself; each entry carries its type so the agent rmdir/
+            // unlinks strictly (a directory it carries t='d').
+            $paths = array_map(
+                static fn(FileEntry $e): array => $e->isDir()
+                    ? ['p' => Wire::encPath($e->path), 't' => 'd']
+                    : ['p' => Wire::encPath($e->path)],
+                $this->sortDeepestFirst($toDelete),
+            );
             foreach ($http->postJson(Protocol::ACTION_DELETE, ['paths' => $paths]) as $r) {
                 if (!isset($r['p'])) {
                     continue;

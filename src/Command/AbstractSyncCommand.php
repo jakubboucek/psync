@@ -127,6 +127,23 @@ abstract class AbstractSyncCommand extends Command
         }
     }
 
+    /**
+     * Orders entries deepest-first (by path depth), so a file or nested directory
+     * is always deleted before its containing directory - a prerequisite for the
+     * non-recursive rmdir on either side.
+     *
+     * @param list<FileEntry> $entries
+     * @return list<FileEntry>
+     */
+    protected function sortDeepestFirst(array $entries): array
+    {
+        usort(
+            $entries,
+            static fn(FileEntry $a, FileEntry $b): int => substr_count($b->path, '/') <=> substr_count($a->path, '/'),
+        );
+        return $entries;
+    }
+
     protected function buildComparator(Config $config, InputInterface $input, HttpClient $http, ?Reporter $reporter = null): Comparator
     {
         $ignore = $this->buildIgnore($config);

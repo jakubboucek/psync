@@ -486,9 +486,14 @@ function handle_hash(array $CONFIG, array $req): void
 // ===========================================================================
 
 /**
- * Input: {paths:[base64]}. Deletes files, except those in the protect list
- * (baked in at install time). Second line of defense – the client only deletes
- * after its own check.
+ * Input: {paths:[{p:base64, t?:'d'}]}. Deletes each entry STRICTLY according to
+ * the type the client declared - it never guesses from disk. A regular file
+ * (no 't') is unlink()ed; a directory (t='d') is rmdir()ed NON-recursively, so a
+ * directory that still holds files (e.g. ones hidden by the client's ignore
+ * mask) deliberately fails and is reported. The client orders the entries
+ * deepest-first, so contents arrive before their containing directory.
+ * Protected paths (baked in at install) are never deleted - second line of
+ * defense after the client's own check. Symlinks are never followed/removed.
  */
 function handle_delete(array $CONFIG, array $req): void
 {
@@ -498,11 +503,17 @@ function handle_delete(array $CONFIG, array $req): void
 
     header('Content-Type: application/x-ndjson; charset=utf-8');
 
-    foreach ($paths as $p64) {
-        $rel = base64_decode((string) $p64, true);
+    foreach ($paths as $entry) {
+        if (!is_array($entry) || !isset($entry['p'])) {
+            continue;
+        }
+        $p64 = (string) $entry['p'];
+        $rel = base64_decode($p64, true);
         if ($rel === false) {
             continue;
         }
+        $wantDir = isset($entry['t']) && $entry['t'] === 'd';
+
         if (path_matches_any($rel, $protect)) {
             emit(['p' => $p64, 'ok' => false, 'err' => 'protected']);
             continue;
@@ -512,11 +523,30 @@ function handle_delete(array $CONFIG, array $req): void
             emit(['p' => $p64, 'ok' => false, 'err' => 'path outside scope']);
             continue;
         }
+        if (is_link($abs)) {
+            emit(['p' => $p64, 'ok' => false, 'err' => 'refusing to delete a symlink']);
+            continue;
+        }
         if (!file_exists($abs)) {
             emit(['p' => $p64, 'ok' => true]); // already gone = goal met
             continue;
         }
-        if (is_dir($abs) || is_link($abs)) {
+
+        if ($wantDir) {
+            if (!is_dir($abs)) {
+                emit(['p' => $p64, 'ok' => false, 'err' => 'not a directory']);
+                continue;
+            }
+            // Non-recursive on purpose: a non-empty directory must fail.
+            if (@rmdir($abs)) {
+                emit(['p' => $p64, 'ok' => true]);
+            } else {
+                emit(['p' => $p64, 'ok' => false, 'err' => is_dir($abs) ? 'directory not empty' : 'cannot remove directory']);
+            }
+            continue;
+        }
+
+        if (is_dir($abs)) {
             emit(['p' => $p64, 'ok' => false, 'err' => 'not a regular file']);
             continue;
         }

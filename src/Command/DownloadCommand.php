@@ -6,6 +6,7 @@ namespace JakubBoucek\Psync\Command;
 
 use JakubBoucek\Psync\Console\Reporter;
 use JakubBoucek\Psync\Sync\Downloader;
+use JakubBoucek\Psync\Sync\FileEntry;
 use JakubBoucek\Psync\Sync\TransferItem;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -58,14 +59,15 @@ final class DownloadCommand extends AbstractSyncCommand
 
         $delete = (bool) $input->getOption('delete');
         $protect = $this->buildProtect($config);
-        $toDelete = []; // local original paths to delete
+        /** @var list<FileEntry> $toDelete local entries to delete (files + dirs) */
+        $toDelete = [];
         $protectedCount = 0;
         if ($delete) {
             foreach ($comparison->localOnly as $rel => $e) {
                 if ($protect->matches($rel)) {
                     $protectedCount++;
                 } else {
-                    $toDelete[] = $e->path;
+                    $toDelete[] = $e;
                 }
             }
         }
@@ -87,8 +89,8 @@ final class DownloadCommand extends AbstractSyncCommand
             foreach ($items as $item) {
                 $output->writeln("<fg=green>↓ {$item->targetPath}</>");
             }
-            foreach ($toDelete as $rel) {
-                $output->writeln("<fg=red>␡ $rel</>");
+            foreach ($toDelete as $e) {
+                $output->writeln('<fg=red>␡ ' . $e->path . ($e->isDir() ? '/' : '') . '</>');
             }
             $io->note(sprintf(
                 'dry run: %d dirs to create, %d to download, %d to delete locally.',
@@ -127,15 +129,25 @@ final class DownloadCommand extends AbstractSyncCommand
             }
         });
 
+        // Deepest-first so a directory's contents are removed before the
+        // directory itself; directories use rmdir (non-recursive), files unlink.
         $deleted = 0;
-        foreach ($toDelete as $rel) {
-            $abs = $config->localRoot . '/' . $rel;
-            if (!is_file($abs) || @unlink($abs)) {
+        foreach ($this->sortDeepestFirst($toDelete) as $e) {
+            $abs = $config->localRoot . '/' . $e->path;
+            if ($e->isDir()) {
+                if (!is_dir($abs) || @rmdir($abs)) {
+                    $deleted++;
+                    $output->writeln("<fg=red>␡ {$e->path}/</>");
+                } else {
+                    $fail++;
+                    $output->writeln("<fg=red>✗ rmdir {$e->path}/</> <fg=gray>(directory not empty)</>");
+                }
+            } elseif (!is_file($abs) || @unlink($abs)) {
                 $deleted++;
-                $output->writeln("<fg=red>␡ $rel</>");
+                $output->writeln("<fg=red>␡ {$e->path}</>");
             } else {
                 $fail++;
-                $output->writeln("<fg=red>✗ delete $rel</>");
+                $output->writeln("<fg=red>✗ delete {$e->path}</>");
             }
         }
 
