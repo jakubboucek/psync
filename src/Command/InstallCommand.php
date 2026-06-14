@@ -96,12 +96,13 @@ final class InstallCommand extends Command
         // psync configuration. Keep the private key secret (outside of public git).
         return [
             'url'        => 'https://example.com/$agentFile',
+            //                       ^^^^^^^^^^^ - put here domain of your website
             'privateKey' => $key,
             'mapping'    => [
-                'local'  => __DIR__,
+                'local'  => __DIR__, // <--- complete path to the local website root
                 'remote' => '/',
             ],
-            'ignore'     => ['/.git', '/vendor', '*.log', '/temp', '/uploads'],
+            'ignore'     => ['/.git', '/.psync.php', '*.log', '/temp', '/uploads'],
             'protect'    => ['/uploads', '/temp'],
             'checksum'   => false,
             'compress'   => true,

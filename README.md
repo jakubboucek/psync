@@ -57,10 +57,14 @@ composer global require jakubboucek/psync
 <?php
 return [
     'url'        => 'https://example.com/psync-agent-XXXXXX.php',
-    'privateKey' => 'base64…',                 // from install, keep secret
-    'mapping'    => ['local' => __DIR__, 'remote' => '/'],
-    'ignore'     => ['/.git', '/vendor', '*.log', '/temp', '/uploads'],
-    'protect'    => ['/uploads', '/temp'],     // never deleted
+    //                       ^^^^^^^^^^^ - put here domain of your website
+    'privateKey' => 'base64…',                   // from install, keep secret
+    'mapping'    => [
+        'local' => __DIR__,                      // complete path to the local website root
+        'remote' => '/'
+    ],
+    'ignore'     => ['/.git', '/.psync.php', '*.log', '/temp', '/uploads'],
+    'protect'    => ['/uploads', '/temp'],       // never deleted
     'checksum'   => false,                       // like rsync -c
     'compress'   => true,                        // GZ during transfer
     'compressSkipExt' => ['jpg','png','zip','gz','pdf','mp4'],
