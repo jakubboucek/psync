@@ -265,8 +265,9 @@ function authenticate(array $CONFIG, string $action, $body): void
  */
 function check_nonce_replay(string $nonce, int $ts): void
 {
-    $store = sys_get_temp_dir() . '/psync_nonces';
-    $fh = @fopen($store, 'c+');
+    $instanceSpec = dechex(crc32(__FILE__));
+    $store = sys_get_temp_dir() . '/psync_nonces_' . $instanceSpec;
+    $fh = @fopen($store, 'cb+');
     if ($fh === false) {
         return; // best-effort
     }
