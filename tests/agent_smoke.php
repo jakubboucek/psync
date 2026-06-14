@@ -185,6 +185,10 @@ if ($mode === 'check') {
     [, $resp] = $call('delete', ['paths' => [['p' => Wire::encPath('sub')]]], $signer);
     $r = $parse($resp);
     $assert(($r['sub']['ok'] ?? null) === false && ($r['sub']['err'] ?? '') === 'not a regular file', 'dir requested as file → not a regular file');
+    // An unknown declared type is rejected, not silently treated as a file.
+    [, $resp] = $call('delete', ['paths' => [['p' => Wire::encPath('a.txt'), 't' => 'x']]], $signer);
+    $r = $parse($resp);
+    $assert(($r['a.txt']['ok'] ?? null) === false && ($r['a.txt']['err'] ?? '') === 'unsupported entry type', 'unknown declared type → rejected');
 
     echo $failed === 0 ? "\nAGENT OK\n" : "\nFAILED: $failed\n";
     exit($failed === 0 ? 0 : 1);

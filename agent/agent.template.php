@@ -512,7 +512,15 @@ function handle_delete(array $CONFIG, array $req): void
         if ($rel === false) {
             continue;
         }
-        $wantDir = isset($entry['t']) && $entry['t'] === 'd';
+        // Strict on the declared type: a file omits 't' (or sends 'f'), a dir
+        // sends 'd'. Any other value is rejected rather than silently treated as
+        // a file - keeps the contract strict and forward-compatible.
+        $type = isset($entry['t']) ? (string) $entry['t'] : 'f';
+        if ($type !== 'f' && $type !== 'd') {
+            emit(['p' => $p64, 'ok' => false, 'err' => 'unsupported entry type']);
+            continue;
+        }
+        $wantDir = $type === 'd';
 
         if (path_matches_any($rel, $protect)) {
             emit(['p' => $p64, 'ok' => false, 'err' => 'protected']);
@@ -541,7 +549,11 @@ function handle_delete(array $CONFIG, array $req): void
             if (@rmdir($abs)) {
                 emit(['p' => $p64, 'ok' => true]);
             } else {
-                emit(['p' => $p64, 'ok' => false, 'err' => is_dir($abs) ? 'directory not empty' : 'cannot remove directory']);
+                // Distinguish the common "still has (ignore-hidden) content" case
+                // from any other failure (e.g. permissions); rmdir leaves the dir
+                // in place either way, so is_dir() alone can't tell them apart.
+                $err = dir_has_entries($abs) ? 'directory not empty' : 'cannot remove directory';
+                emit(['p' => $p64, 'ok' => false, 'err' => $err]);
             }
             continue;
         }
@@ -553,6 +565,29 @@ function handle_delete(array $CONFIG, array $req): void
         emit(['p' => $p64, 'ok' => @unlink($abs)]);
     }
     emit(['end' => true]);
+}
+
+/**
+ * Whether the directory contains at least one entry besides '.' and '..'.
+ * Returns false when it cannot be opened (treated as "not provably non-empty",
+ * so the caller reports a generic failure rather than a misleading one).
+ */
+function dir_has_entries(string $dir): bool
+{
+    $h = @opendir($dir);
+    if ($h === false) {
+        return false;
+    }
+    try {
+        while (($name = readdir($h)) !== false) {
+            if ($name !== '.' && $name !== '..') {
+                return true;
+            }
+        }
+    } finally {
+        closedir($h);
+    }
+    return false;
 }
 
 /**

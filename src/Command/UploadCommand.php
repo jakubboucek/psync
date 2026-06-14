@@ -142,17 +142,19 @@ final class UploadCommand extends AbstractSyncCommand
             // Deepest-first so a directory's contents are removed before the
             // directory itself; each entry carries its type so the agent rmdir/
             // unlinks strictly (a directory it carries t='d').
-            $paths = array_map(
-                static fn(FileEntry $e): array => $e->isDir()
-                    ? ['p' => Wire::encPath($e->path), 't' => 'd']
-                    : ['p' => Wire::encPath($e->path)],
-                $this->sortDeepestFirst($toDelete),
-            );
+            $isDir = []; // encoded path => directory? (to render the trailing slash on the result)
+            $paths = [];
+            foreach ($this->sortDeepestFirst($toDelete) as $e) {
+                $enc = Wire::encPath($e->path);
+                $isDir[$enc] = $e->isDir();
+                $paths[] = $e->isDir() ? ['p' => $enc, 't' => 'd'] : ['p' => $enc];
+            }
             foreach ($http->postJson(Protocol::ACTION_DELETE, ['paths' => $paths]) as $r) {
                 if (!isset($r['p'])) {
                     continue;
                 }
-                $rel = Wire::decPath((string) $r['p']);
+                $enc = (string) $r['p'];
+                $rel = Wire::decPath($enc) . (($isDir[$enc] ?? false) ? '/' : '');
                 if (($r['ok'] ?? false) === true) {
                     $deleted++;
                     $output->writeln("<fg=red>␡ $rel</>");
