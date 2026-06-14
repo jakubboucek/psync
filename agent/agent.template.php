@@ -39,12 +39,12 @@ namespace JakubBoucek\Psync\Agent;
 // ---------------------------------------------------------------------------
 // Configuration (values filled in by `install`)
 // ---------------------------------------------------------------------------
-$CONFIG = array(
+$CONFIG = [
     'publicKey'       => 'PSYNC_PUBLICKEY_PLACEHOLDER', // base64 of the public key
     'protocolVersion' => 1,
     'root'            => __DIR__,                          // remote root = agent's directory
-    'protect'         => array(/* PSYNC_PROTECT */),     // glob patterns that are never deleted
-);
+    'protect'         => [/* PSYNC_PROTECT */],     // glob patterns that are never deleted
+];
 
 // ---------------------------------------------------------------------------
 // Protocol constants (must match the client – JakubBoucek\Psync\Protocol\Protocol)
@@ -197,7 +197,7 @@ function read_body(bool $isUpload)
         }
         fclose($in);
         fclose($out);
-        return array('tmp' => $tmp, 'sha256' => hash_final($ctx));
+        return ['tmp' => $tmp, 'sha256' => hash_final($ctx)];
     }
 
     // JSON action – the body is small.
@@ -217,7 +217,7 @@ function check_protocol_version(array $CONFIG): void
             'Protocol version mismatch: agent is v%d, client sent v%s. '
                 . 'Regenerate the agent with `psync install` and re-upload it.',
             (int) $CONFIG['protocolVersion'],
-            $client === null ? '?' : $client
+            $client ?? '?'
         ), 426);
     }
 }
@@ -275,7 +275,7 @@ function check_nonce_replay(string $nonce, int $ts): void
         return;
     }
     $now = time();
-    $seen = array();
+    $seen = [];
     rewind($fh);
     while (($line = fgets($fh)) !== false) {
         $parts = explode(' ', trim($line));
@@ -359,7 +359,7 @@ function json_body($body): array
 function handle_capabilities(array $CONFIG): void
 {
     header('Content-Type: application/json; charset=utf-8');
-    $caps = array(
+    $caps = [
         'protocolVersion'       => (int) $CONFIG['protocolVersion'],
         'serverTime'            => time(),
         'phpVersion'            => PHP_VERSION,
@@ -371,9 +371,9 @@ function handle_capabilities(array $CONFIG): void
             ? (int) $CONFIG['_maxExecutionTime']
             : (int) ini_get('max_execution_time'),
         'setTimeLimitAvailable' => set_time_limit_available(),
-        'hashAlgos'             => array_values(array_intersect(array('md5', 'sha1', 'crc32b'), hash_algos())),
+        'hashAlgos'             => array_values(array_intersect(['md5', 'sha1', 'crc32b'], hash_algos())),
         'zlibOutputCompression' => !empty($CONFIG['_zlibOutputCompression']),
-    );
+    ];
     echo json_encode($caps);
 }
 
@@ -401,19 +401,19 @@ function handle_list(array $CONFIG, array $req): void
     header('Content-Type: application/x-ndjson; charset=utf-8');
 
     if ($base === null) {
-        emit(array('error' => 'Path outside the allowed scope.'));
+        emit(['error' => 'Path outside the allowed scope.']);
         return;
     }
     if (!file_exists($base)) {
-        emit(array('end' => true)); // scope does not exist on the server = empty
+        emit(['end' => true]); // scope does not exist on the server = empty
         return;
     }
 
     walk_files($root, $base, function (string $rel, $stat): void {
-        emit(array('p' => base64_encode($rel), 's' => (int) $stat['size'], 'm' => (int) $stat['mtime']));
+        emit(['p' => base64_encode($rel), 's' => (int) $stat['size'], 'm' => (int) $stat['mtime']]);
     });
 
-    emit(array('end' => true));
+    emit(['end' => true]);
 }
 
 
@@ -428,7 +428,7 @@ function handle_list(array $CONFIG, array $req): void
 function handle_hash(array $CONFIG, array $req): void
 {
     $root = $CONFIG['root'];
-    $paths = isset($req['paths']) && is_array($req['paths']) ? $req['paths'] : array();
+    $paths = isset($req['paths']) && is_array($req['paths']) ? $req['paths'] : [];
 
     header('Content-Type: application/x-ndjson; charset=utf-8');
 
@@ -439,13 +439,13 @@ function handle_hash(array $CONFIG, array $req): void
         }
         $abs = resolve_scope($root, $rel);
         if ($abs === null || !is_file($abs)) {
-            emit(array('p' => $p64, 'h' => null));
+            emit(['p' => $p64, 'h' => null]);
             continue;
         }
         $h = @hash_file(HASH_ALGO, $abs);
-        emit(array('p' => $p64, 'h' => $h === false ? null : $h));
+        emit(['p' => $p64, 'h' => $h === false ? null : $h]);
     }
-    emit(array('end' => true));
+    emit(['end' => true]);
 }
 
 
@@ -461,8 +461,8 @@ function handle_hash(array $CONFIG, array $req): void
 function handle_delete(array $CONFIG, array $req): void
 {
     $root = $CONFIG['root'];
-    $protect = isset($CONFIG['protect']) && is_array($CONFIG['protect']) ? $CONFIG['protect'] : array();
-    $paths = isset($req['paths']) && is_array($req['paths']) ? $req['paths'] : array();
+    $protect = isset($CONFIG['protect']) && is_array($CONFIG['protect']) ? $CONFIG['protect'] : [];
+    $paths = isset($req['paths']) && is_array($req['paths']) ? $req['paths'] : [];
 
     header('Content-Type: application/x-ndjson; charset=utf-8');
 
@@ -472,25 +472,25 @@ function handle_delete(array $CONFIG, array $req): void
             continue;
         }
         if (path_matches_any($rel, $protect)) {
-            emit(array('p' => $p64, 'ok' => false, 'err' => 'protected'));
+            emit(['p' => $p64, 'ok' => false, 'err' => 'protected']);
             continue;
         }
         $abs = resolve_scope($root, $rel);
         if ($abs === null) {
-            emit(array('p' => $p64, 'ok' => false, 'err' => 'path outside scope'));
+            emit(['p' => $p64, 'ok' => false, 'err' => 'path outside scope']);
             continue;
         }
         if (!file_exists($abs)) {
-            emit(array('p' => $p64, 'ok' => true)); // already gone = goal met
+            emit(['p' => $p64, 'ok' => true]); // already gone = goal met
             continue;
         }
         if (is_dir($abs) || is_link($abs)) {
-            emit(array('p' => $p64, 'ok' => false, 'err' => 'not a regular file'));
+            emit(['p' => $p64, 'ok' => false, 'err' => 'not a regular file']);
             continue;
         }
-        emit(array('p' => $p64, 'ok' => @unlink($abs)));
+        emit(['p' => $p64, 'ok' => @unlink($abs)]);
     }
-    emit(array('end' => true));
+    emit(['end' => true]);
 }
 
 /**
@@ -540,9 +540,9 @@ function path_matches_any(string $rel, array $patterns): bool
 function handle_download(array $CONFIG, array $req): void
 {
     $root = $CONFIG['root'];
-    $files = isset($req['files']) && is_array($req['files']) ? $req['files'] : array();
+    $files = isset($req['files']) && is_array($req['files']) ? $req['files'] : [];
     $compress = !empty($req['compress']);
-    $skip = array();
+    $skip = [];
     if (isset($req['skipExt']) && is_array($req['skipExt'])) {
         foreach ($req['skipExt'] as $e) {
             $skip[strtolower((string) $e)] = true;
@@ -633,16 +633,16 @@ function handle_upload(array $CONFIG, $body): void
         $abs = resolve_scope($root, $rel);
         if ($abs === null) {
             skip_bytes($in, $h['payloadLen']);
-            emit(array('p' => base64_encode($rel), 'ok' => false, 'err' => 'path outside scope'));
+            emit(['p' => base64_encode($rel), 'ok' => false, 'err' => 'path outside scope']);
             continue;
         }
         $err = write_upload_file($abs, $in, $h);
-        emit(array('p' => base64_encode($rel), 'ok' => $err === null, 'err' => $err));
+        emit(['p' => base64_encode($rel), 'ok' => $err === null, 'err' => $err]);
     }
 
     fclose($in);
     @unlink($body['tmp']);
-    emit(array('end' => true));
+    emit(['end' => true]);
 }
 
 /**
@@ -750,14 +750,14 @@ function frame_read_header($in)
     $pathLen = unpack('N', $lenRaw)[1];
     $path = $pathLen > 0 ? stream_read_exact($in, $pathLen) : '';
     $fixed = stream_read_exact($in, 41);
-    return array(
+    return [
         'path' => $path,
         'flags' => unpack('C', substr($fixed, 0, 1))[1],
         'mtime' => unpack('J', substr($fixed, 1, 8))[1],
         'origSize' => unpack('J', substr($fixed, 9, 8))[1],
         'payloadLen' => unpack('J', substr($fixed, 17, 8))[1],
         'md5' => substr($fixed, 25, 16),
-    );
+    ];
 }
 
 /**
@@ -855,7 +855,7 @@ function gz_to_temp(string $abs, &$md5raw, &$plen)
 function walk_files(string $root, string $base, callable $cb): void
 {
     $rootLen = strlen(rtrim($root, '/')) + 1;
-    $stack = array($base);
+    $stack = [$base];
 
     while (!empty($stack)) {
         $dir = array_pop($stack);
@@ -864,7 +864,7 @@ function walk_files(string $root, string $base, callable $cb): void
             continue;
         }
         sort($entries, SORT_STRING);
-        $subdirs = array();
+        $subdirs = [];
         foreach ($entries as $name) {
             if ($name === '.' || $name === '..') {
                 continue;
@@ -977,7 +977,7 @@ function send_error(int $code, string $msg): void
         http_response_code($code);
         header('Content-Type: application/x-ndjson; charset=utf-8');
     }
-    echo json_encode(array('error' => $msg, 'code' => $code)) . "\n";
+    echo json_encode(['error' => $msg, 'code' => $code]) . "\n";
     @flush();
 }
 
