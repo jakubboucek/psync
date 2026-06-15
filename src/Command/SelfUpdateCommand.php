@@ -15,10 +15,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
  * `self-update` – re-renders the server agent from the current template, reusing
- * the **existing** key and agent filename taken from the config. Use it after a
- * `Protocol::VERSION` bump (or a template change): unlike `install`, it generates
- * no new key and no new URL, so the config needs no changes – you only re-upload
- * the regenerated agent over the old one via FTP.
+ * everything from the existing config: the key (the public key is derived from
+ * the private one), the agent filename, the scope (agent-dir → sync-root) and the
+ * protect-list. Use it after a `Protocol::VERSION` bump or a template change: it
+ * generates no new key and changes no config, so you only re-upload the agent.
  */
 final class SelfUpdateCommand extends Command
 {
@@ -26,41 +26,45 @@ final class SelfUpdateCommand extends Command
     {
         $this
             ->setName('self-update')
-            ->setDescription('Regenerates the server agent from the current template, reusing the existing key and agent filename.')
-            ->addOption('config', 'c', InputOption::VALUE_REQUIRED, 'Path to the configuration file.', '.psync.php')
-            ->addOption('output', 'o', InputOption::VALUE_REQUIRED, 'Where to write the rendered agent (default: derived from the config url).');
+            ->setDescription('Regenerates the server agent from the current template, reusing the existing key, filename and scope.')
+            ->addOption('config', 'c', InputOption::VALUE_REQUIRED, 'Path to the configuration file.', '.psync.php');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        $configPath = (string) $input->getOption('config');
-        $outputOverride = $input->getOption('output');
-
-        return $this->generate($io, $configPath, $outputOverride !== null ? (string) $outputOverride : null);
+        return $this->generate($io, (string) $input->getOption('config'));
     }
 
     /**
-     * Renders the agent from the existing config (key + agent filename) and writes it.
-     * Shared with `install` so its "did you mean self-update?" prompt can delegate here.
+     * Re-renders the agent from the existing config and writes it under the same
+     * filename. Shared with `install` so its "did you mean self-update?" prompt
+     * can delegate here.
      */
-    public function generate(SymfonyStyle $io, string $configPath, ?string $outputOverride): int
+    public function generate(SymfonyStyle $io, string $configPath): int
     {
         if (!is_file($configPath)) {
             $io->error("Configuration file does not exist: $configPath. Run `install` first.");
             return Command::FAILURE;
         }
 
+        // Config::load rejects the pre-v1.1 format outright (pointing at `install --force`);
+        // here we additionally require the filename that self-update writes.
         $config = Config::load($configPath);
-        $publicKey = Signer::publicKeyFromPrivate($config->requirePrivateKey());
-
-        $agentPath = $outputOverride ?? self::agentFilenameFromUrl($config->url);
-        if ($agentPath === null) {
-            $io->error("Unable to derive the agent filename from the config url '{$config->url}'. Pass it explicitly with -o.");
+        if ($config->agentFile === '') {
+            $io->error("The config has no 'agentFile' – it cannot be self-updated. Re-create it with `psync install --force`.");
             return Command::FAILURE;
         }
 
-        $agent = new AgentBuilder()->build($publicKey, '', $config->protect);
+        $publicKey = Signer::publicKeyFromPrivate($config->requirePrivateKey());
+        $scopeRelPath = $config->scopeRelPath();
+        $agent = new AgentBuilder()->build($publicKey, $scopeRelPath, $config->protect);
+
+        $projectRoot = dirname((string) $config->configPath);
+        $agentLocalDir = ($config->agentDir !== '' && is_dir($projectRoot . '/' . $config->agentDir))
+            ? $projectRoot . '/' . $config->agentDir
+            : $projectRoot;
+        $agentPath = $agentLocalDir . '/' . $config->agentFile;
 
         if (file_put_contents($agentPath, $agent) === false) {
             $io->error("Unable to write the agent to '$agentPath'.");
@@ -68,20 +72,12 @@ final class SelfUpdateCommand extends Command
         }
 
         $io->success("Agent regenerated: $agentPath");
-        $io->writeln('Re-upload it to the server via FTP, overwriting the old agent file.');
-        $io->writeln('Same URL, same key – the config needs <comment>no</comment> changes.');
+        $io->writeln(sprintf(
+            'Re-upload it via FTP into <comment>%s</comment>, overwriting the old agent file.',
+            $config->agentDir === '' ? 'the sync-root' : $config->agentDir,
+        ));
+        $io->writeln('Same URL, same key, same scope – the config needs <comment>no</comment> changes.');
 
         return Command::SUCCESS;
-    }
-
-    /** Extracts the agent's basename from the config url (e.g. .../psync-agent-ab12cd.php). */
-    private static function agentFilenameFromUrl(string $url): ?string
-    {
-        $path = parse_url($url, PHP_URL_PATH);
-        if (!is_string($path) || $path === '') {
-            return null;
-        }
-        $base = basename($path);
-        return $base !== '' ? $base : null;
     }
 }

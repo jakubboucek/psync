@@ -4,13 +4,22 @@ declare(strict_types=1);
 
 namespace JakubBoucek\Psync\Config;
 
+use JakubBoucek\Psync\Sync\PathRelativizer;
 use RuntimeException;
 
 /**
  * Project client configuration, loaded from a PHP file that returns an array.
  *
- * The rich config (local↔remote mapping, ignore, protect) lives on the client;
- * the server agent only knows its public key, remote root and protect-list.
+ * The rich config (which tree to sync, ignore, protect) lives on the client; the
+ * server agent only knows its public key, its baked scope and the protect-list.
+ *
+ * Three directories matter (all relative to the config file's own directory,
+ * the "project-root"):
+ *  - sync-root  – the top of the synchronized tree (= the agent's remote root),
+ *  - agent-dir  – where the agent file physically lives (its deploy location),
+ *  - the agent URL – the public HTTP endpoint, stored verbatim.
+ * The agent's baked scope is derived as the path agent-dir -> sync-root; it is
+ * NOT stored (no third source of truth) but recomputed on demand.
  */
 final readonly class Config
 {
@@ -32,7 +41,9 @@ final readonly class Config
         public string $url,
         public ?string $privateKey,
         public string $localRoot,
-        public string $remoteRoot,
+        public string $syncRoot,
+        public string $agentDir,
+        public string $agentFile,
         array $ignore = [],
         array $protect = [],
         public bool $checksum = false,
@@ -63,30 +74,37 @@ final readonly class Config
             throw new RuntimeException("Configuration file must return an array (`return [...]`): $path");
         }
 
-        $require = static function (string $key) use ($data, $path): mixed {
-            if (!array_key_exists($key, $data) || $data[$key] === null || $data[$key] === '') {
-                throw new RuntimeException("Required config key '$key' is missing: $path");
-            }
-            return $data[$key];
-        };
-
-        $mapping = $data['mapping'] ?? [];
-        if (!is_array($mapping) || !isset($mapping['local'])) {
-            throw new RuntimeException("The 'mapping.local' key is required: $path");
+        // The v1.0 layout (a `mapping` block + `url`) is incompatible with v1.1+.
+        if (isset($data['mapping']) || !isset($data['agentUrl'])) {
+            throw new RuntimeException(
+                "Configuration format changed in v1.1: replace the 'mapping' block with "
+                . "'syncRoot', 'agentDir', 'agentFile' and 'agentUrl', or re-create the config "
+                . "with `psync install --force`: $path",
+            );
         }
 
-        $local = self::normalizeDir((string) $mapping['local']);
-        if (!is_dir($local)) {
-            throw new RuntimeException("mapping.local does not exist or is not a directory: $local");
+        $url = (string) $data['agentUrl'];
+        if ($url === '') {
+            throw new RuntimeException("Required config key 'agentUrl' is empty: $path");
         }
 
         $configReal = realpath($path);
+        $configReal = $configReal !== false ? $configReal : $path;
+        $projectRoot = dirname($configReal);
+
+        $syncRoot = trim((string) ($data['syncRoot'] ?? ''), '/');
+        $local = self::resolveUnder($projectRoot, $syncRoot);
+        if (!is_dir($local)) {
+            throw new RuntimeException("syncRoot does not exist or is not a directory: $local");
+        }
 
         return new self(
-            url: (string) $require('url'),
+            url: $url,
             privateKey: isset($data['privateKey']) ? (string) $data['privateKey'] : null,
             localRoot: $local,
-            remoteRoot: self::normalizeRemote((string) ($mapping['remote'] ?? '/')),
+            syncRoot: $syncRoot,
+            agentDir: trim((string) ($data['agentDir'] ?? ''), '/'),
+            agentFile: (string) ($data['agentFile'] ?? ''),
             ignore: (array) ($data['ignore'] ?? []),
             protect: (array) ($data['protect'] ?? []),
             checksum: (bool) ($data['checksum'] ?? false),
@@ -94,8 +112,19 @@ final readonly class Config
             compressSkipExt: (array) ($data['compressSkipExt']
                 ?? ['jpg', 'jpeg', 'png', 'gif', 'webp', 'zip', 'gz', 'pdf', 'mp4', 'mp3']),
             serverGzipWorkaround: (bool) ($data['serverGzipWorkaround'] ?? false),
-            configPath: $configReal !== false ? $configReal : $path,
+            configPath: $configReal,
         );
+    }
+
+    /**
+     * The agent's baked scope: the relative path from the agent's directory to
+     * the sync root. Recomputed (never stored) so it can never drift from the
+     * directories it is derived from. The capabilities cross-check compares this
+     * against the value the deployed agent reports.
+     */
+    public function scopeRelPath(): string
+    {
+        return PathRelativizer::relativize($this->agentDir, $this->syncRoot);
     }
 
     /**
@@ -111,16 +140,11 @@ final readonly class Config
         return $this->privateKey;
     }
 
-    private static function normalizeDir(string $dir): string
+    /** Resolves a project-root-relative path, falling back to a lexical join when realpath fails. */
+    private static function resolveUnder(string $base, string $rel): string
     {
-        $real = realpath($dir);
-        return $real !== false ? $real : rtrim($dir, '/');
-    }
-
-    /** The remote root is always a "/"-prefixed path without a trailing slash (except for the root). */
-    private static function normalizeRemote(string $remote): string
-    {
-        $remote = '/' . trim($remote, '/');
-        return $remote === '/' ? '/' : rtrim($remote, '/');
+        $candidate = $rel === '' ? $base : $base . '/' . $rel;
+        $real = realpath($candidate);
+        return $real !== false ? $real : rtrim($candidate, '/');
     }
 }
