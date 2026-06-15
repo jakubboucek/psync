@@ -51,10 +51,11 @@ final class InstallCommand extends Command
         $configPath = (string) $input->getOption('config');
         $force = (bool) $input->getOption('force');
 
-        // An existing config almost always means the user wants `re-install` (keep the key,
-        // URL and layout, just re-render the agent), not a fresh install that overwrites it.
+        // An existing config almost always means the user wants `re-install` (keep the URL
+        // and layout, just re-render the agent), not a fresh install that overwrites it.
+        // The delegated re-install rotates the key by default, like a direct `re-install`.
         if (is_file($configPath) && !$force) {
-            if ($io->confirm("An existing config '$configPath' was found. `install` creates a brand-new key and agent and overwrites the config. Did you mean `re-install` instead (regenerate the agent, keep the existing key and layout)?", true)) {
+            if ($io->confirm("An existing config '$configPath' was found. `install` creates a brand-new key and agent and overwrites the config. Did you mean `re-install` instead (regenerate the agent, rotate the key, keep the existing URL and layout)?", true)) {
                 return new ReinstallCommand()->generate($io, $configPath);
             }
             $io->warning("Proceeding with a fresh install – '$configPath' will be overwritten.");
@@ -157,7 +158,10 @@ final class InstallCommand extends Command
 
         // --- write the config ------------------------------------------------------------
         $configExisted = is_file($configPath);
-        file_put_contents($configPath, $this->configTemplate($pair['private'], $url, $syncRoot, $agentDir, $agentFile));
+        if (file_put_contents($configPath, $this->configTemplate($pair['private'], $url, $syncRoot, $agentDir, $agentFile)) === false) {
+            $io->error("Unable to write the configuration to '$configPath'. The agent was written but the config was NOT.");
+            return Command::FAILURE;
+        }
         $io->success(($configExisted ? 'Configuration file overwritten' : 'Configuration file generated')
             . " with the private key: $configPath");
         if ($placeholder) {

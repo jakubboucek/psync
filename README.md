@@ -25,8 +25,8 @@ respecting the tiny time/memory/upload limits of cheap shared hosting.
    and nowhere else, so even a leaked agent file lets nobody forge a request. The agent gets a
    **randomized filename** (`psync-agent-<nonce>.php`) so its URL can't be scanned for, and it carries a
    header comment that tells anyone who later stumbles on it that it is a maintenance tool — not a
-   backdoor — and is safe to delete. After a version bump, `psync re-install` re-renders the agent in
-   place (same key, same layout) — you only re-upload it.
+   backdoor — and is safe to delete. After a version bump, `psync re-install` re-renders the agent
+   reusing your layout (rotating the key by default) — you re-upload it.
 
    The agent's reach is a **fixed scope baked in at install** — the path from where the agent file lives
    (**agent-dir**) to the top of the synchronized tree (**sync-root**). The two need not coincide: the
