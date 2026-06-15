@@ -50,7 +50,7 @@ final readonly class Signer
 
     /**
      * Derives the public key from a private (secret) key – the Ed25519 secret key
-     * embeds its public half, so `self-update` can re-render the agent without the
+     * embeds its public half, so `re-install` can re-render the agent without the
      * public key being stored anywhere (the config holds only the private key).
      *
      * @return string base64 public key

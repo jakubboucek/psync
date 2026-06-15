@@ -26,7 +26,7 @@
  * Learn more / verify the source: https://github.com/jakubboucek/psync
  *
  * ───────────────────────────────────────────────────────────────────────────
- * GENERATED FILE — do not edit by hand; regenerate with `psync self-update`.
+ * GENERATED FILE — do not edit by hand; regenerate with `psync re-install`.
  * Target compatibility: PHP 7.4+ (no Composer dependencies, only ext-sodium).
  * ───────────────────────────────────────────────────────────────────────────
  * @noinspection AutoloadingIssuesInspection

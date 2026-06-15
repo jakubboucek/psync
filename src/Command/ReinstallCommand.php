@@ -14,18 +14,21 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * `self-update` – re-renders the server agent from the current template, reusing
- * everything from the existing config: the key (the public key is derived from
- * the private one), the agent filename, the scope (agent-dir → sync-root) and the
- * protect-list. Use it after a `Protocol::VERSION` bump or a template change: it
- * generates no new key and changes no config, so you only re-upload the agent.
+ * `re-install` (alias `reinstall`) – re-renders the server agent from the current
+ * template, reusing everything from the existing config: the key (the public key
+ * is derived from the private one), the agent filename, the scope (agent-dir →
+ * sync-root) and the protect-list. Think `apt reinstall`: it rebuilds the deployed
+ * artifact but keeps the configuration. Use it after a `Protocol::VERSION` bump or
+ * a template change: it generates no new key and changes no config, so you only
+ * re-upload the agent.
  */
-final class SelfUpdateCommand extends Command
+final class ReinstallCommand extends Command
 {
     protected function configure(): void
     {
         $this
-            ->setName('self-update')
+            ->setName('re-install')
+            ->setAliases(['reinstall'])
             ->setDescription('Regenerates the server agent from the current template, reusing the existing key, filename and scope.')
             ->addOption('config', 'c', InputOption::VALUE_REQUIRED, 'Path to the configuration file.', '.psync.php');
     }
@@ -38,7 +41,7 @@ final class SelfUpdateCommand extends Command
 
     /**
      * Re-renders the agent from the existing config and writes it under the same
-     * filename. Shared with `install` so its "did you mean self-update?" prompt
+     * filename. Shared with `install` so its "did you mean re-install?" prompt
      * can delegate here.
      */
     public function generate(SymfonyStyle $io, string $configPath): int
@@ -49,10 +52,10 @@ final class SelfUpdateCommand extends Command
         }
 
         // Config::load rejects the pre-v1.1 format outright (pointing at `install --force`);
-        // here we additionally require the filename that self-update writes.
+        // here we additionally require the filename that re-install writes.
         $config = Config::load($configPath);
         if ($config->agentFile === '') {
-            $io->error("The config has no 'agentFile' – it cannot be self-updated. Re-create it with `psync install --force`.");
+            $io->error("The config has no 'agentFile' – it cannot be re-installed. Re-create it with `psync install --force`.");
             return Command::FAILURE;
         }
 

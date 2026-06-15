@@ -25,7 +25,7 @@ respecting the tiny time/memory/upload limits of cheap shared hosting.
    and nowhere else, so even a leaked agent file lets nobody forge a request. The agent gets a
    **randomized filename** (`psync-agent-<nonce>.php`) so its URL can't be scanned for, and it carries a
    header comment that tells anyone who later stumbles on it that it is a maintenance tool — not a
-   backdoor — and is safe to delete. After a version bump, `psync self-update` re-renders the agent in
+   backdoor — and is safe to delete. After a version bump, `psync re-install` re-renders the agent in
    place (same key, same layout) — you only re-upload it.
 
    The agent's reach is a **fixed scope baked in at install** — the path from where the agent file lives
@@ -69,7 +69,7 @@ return [
     'privateKey' => 'base64…',                   // from install, keep secret
     'syncRoot'   => '',                          // top of the synchronized tree ('' = this directory)
     'agentDir'   => 'www',                        // where the agent file is deployed ('' = sync-root)
-    'agentFile'  => 'psync-agent-XXXXXX.php',      // basename, used by self-update
+    'agentFile'  => 'psync-agent-XXXXXX.php',      // basename, used by re-install
     'ignore'     => ['/.git', '*.log', '/temp', '/uploads'],
     'protect'    => ['/uploads', '/temp'],       // never deleted
     'checksum'   => false,                       // like rsync -c
@@ -84,7 +84,7 @@ return [
 - **`privateKey`** – base64 Ed25519 key from `install`; signs every request. **Keep secret** (the config file is auto-excluded from sync so it can never be uploaded).
 - **`syncRoot`** – the top of the synchronized tree, relative to this file's directory (`''` = the project-root). This is the only directory the agent may touch.
 - **`agentDir`** – where the agent file is deployed, relative to this file's directory (`''` = the sync-root). The agent's scope is derived as the path agent-dir → sync-root.
-- **`agentFile`** – the agent's filename; `self-update` rewrites this file.
+- **`agentFile`** – the agent's filename; `re-install` rewrites this file.
 - **`ignore`** / **`protect`** – see below.
 - **`checksum`** – always hash files instead of trusting size+mtime (like `rsync -c`); slower.
 - **`compress`** / **`compressSkipExt`** – gzip the payload during transfer, except for the listed (already-compressed) extensions.
@@ -124,7 +124,7 @@ and a directory on the other is reported as a **type conflict** and skipped (nev
 psync install [--host <h> | --agent-url <u>] \
               [--sync-root <dir>] [--agent-dir <dir>] [--agent-file <name>] \
               [-c .psync.php] [-f]                # generate agent + keys, write the config
-psync self-update [-c .psync.php]                 # regenerate the agent, keeping key + URL + scope
+psync re-install [-c .psync.php]                 # regenerate the agent, keeping key + URL + scope (alias: reinstall)
 psync compare  [path] [-c …] [-v] [--checksum]   # list differences (transfers nothing)
 psync upload   [path] [--delete] [--dry-run]     # local → remote
 psync download [path] [--delete] [--dry-run]     # remote → local
@@ -139,13 +139,14 @@ psync download [path] [--delete] [--dry-run]     # remote → local
 
 - **`install`** is a one-time bootstrap: it generates a fresh key pair and a randomly-named agent, and
   writes (or, if you confirm, **overwrites**) `.psync.php`. Run on an existing config it first asks whether
-  you actually meant `self-update`. The HTTP endpoint is given either as **`--host`** (the URL is composed
+  you actually meant `re-install`. The HTTP endpoint is given either as **`--host`** (the URL is composed
   by convention, e.g. `--host example.com` or `--host example.com/tools`) or **`--agent-url`** (the full
   URL, stored verbatim) — not both. **`--sync-root`** / **`--agent-dir`** describe the layout (relative to
   the project-root; defaults: sync-root = project-root, agent-dir = sync-root); **`--agent-file`** overrides
   the randomized name (a directory in it is taken as the agent-dir).
-- **`self-update`** re-renders the agent after a protocol-version bump (a `psync …` run will tell you when
-  one is needed). It reuses the **existing key, filename and scope** from the config, so nothing in
+- **`re-install`** (alias **`reinstall`**; think `apt reinstall`) re-renders the agent after a
+  protocol-version bump (a `psync …` run will tell you when one is needed). It reuses the **existing key,
+  filename and scope** from the config, so nothing in
   `.psync.php` changes — just re-upload the regenerated agent over the old one via FTP.
 
 Example layouts (run from the project-root):

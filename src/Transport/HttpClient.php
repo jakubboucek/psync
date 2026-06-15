@@ -18,7 +18,7 @@ use RuntimeException;
 final class HttpClient
 {
     private const string VERSION_MISMATCH = 'Protocol version mismatch: the agent rejected the request. '
-        . 'Regenerate the agent with `psync self-update` and re-upload it.';
+        . 'Regenerate the agent with `psync re-install` and re-upload it.';
 
     private int $timeOffset = 0;
 
@@ -49,7 +49,7 @@ final class HttpClient
         if ($agentVersion !== Protocol::VERSION) {
             throw new RuntimeException(sprintf(
                 'Protocol version mismatch: the agent is v%d but this psync client is v%d. '
-                . 'Regenerate the agent with `psync self-update` and re-upload it.',
+                . 'Regenerate the agent with `psync re-install` and re-upload it.',
                 $agentVersion,
                 Protocol::VERSION,
             ));
@@ -85,7 +85,7 @@ final class HttpClient
         if (PathRelativizer::normalize($reported) !== PathRelativizer::normalize($this->expectedScopeRelPath)) {
             throw new RuntimeException(sprintf(
                 "Agent scope mismatch: the deployed agent syncs '%s' relative to its own directory, "
-                . "but the config expects '%s'. Regenerate the agent with `psync self-update` and re-upload it.",
+                . "but the config expects '%s'. Regenerate the agent with `psync re-install` and re-upload it.",
                 $reported,
                 $this->expectedScopeRelPath,
             ));
@@ -94,7 +94,7 @@ final class HttpClient
         if (($caps['syncRoot'] ?? null) === null) {
             throw new RuntimeException(sprintf(
                 "Agent scope does not resolve on the server: the baked path '%s' points outside the agent's "
-                . 'reachable tree. Check agent-dir/sync-root and run `psync self-update`.',
+                . 'reachable tree. Check agent-dir/sync-root and run `psync re-install`.',
                 $reported,
             ));
         }

@@ -51,11 +51,11 @@ final class InstallCommand extends Command
         $configPath = (string) $input->getOption('config');
         $force = (bool) $input->getOption('force');
 
-        // An existing config almost always means the user wants `self-update` (keep the key,
+        // An existing config almost always means the user wants `re-install` (keep the key,
         // URL and layout, just re-render the agent), not a fresh install that overwrites it.
         if (is_file($configPath) && !$force) {
-            if ($io->confirm("An existing config '$configPath' was found. `install` creates a brand-new key and agent and overwrites the config. Did you mean `self-update` instead (regenerate the agent, keep the existing key and layout)?", true)) {
-                return new SelfUpdateCommand()->generate($io, $configPath);
+            if ($io->confirm("An existing config '$configPath' was found. `install` creates a brand-new key and agent and overwrites the config. Did you mean `re-install` instead (regenerate the agent, keep the existing key and layout)?", true)) {
+                return new ReinstallCommand()->generate($io, $configPath);
             }
             $io->warning("Proceeding with a fresh install – '$configPath' will be overwritten.");
         }
@@ -218,7 +218,7 @@ final class InstallCommand extends Command
             'privateKey' => $key,
             'syncRoot'   => $syncRoot,  // top of the synchronized tree ('' = this directory)
             'agentDir'   => $agentDir,  // where the agent file is deployed ('' = sync-root)
-            'agentFile'  => $agentFile, // basename, used by `self-update`
+            'agentFile'  => $agentFile, // basename, used by `re-install`
             'ignore'     => ['/.git', '*.log', '/temp', '/uploads'],
             'protect'    => ['/uploads', '/temp'],
             'checksum'   => false,

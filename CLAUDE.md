@@ -34,14 +34,15 @@ documentation is in [README.md](README.md); here are the things important for ed
   rejected with a migration hint pointing at `install --force`): `agentUrl` (verbatim, used by `HttpClient`),
   `syncRoot` + `agentDir` + `agentFile` (relative to the config dir), `privateKey`, and the behavior flags.
   `localRoot` is `syncRoot` resolved against the config dir (what the client walks).
-- **`install` vs `self-update`** (`InstallCommand`, `SelfUpdateCommand`): `install` is the bootstrap — new key
-  pair, new randomized filename, and it **writes/overwrites** `.psync.php`. Run over an existing config it
-  asks "did you mean `self-update`?" (default yes) and, on yes, delegates straight to
-  `SelfUpdateCommand::generate()`; on no (or `--force`) it does a fresh install and clobbers the config.
-  Two mutually-exclusive HTTP modes: `--host` (composes the URL = host + '/' + agentFile; host may carry a
-  path) or `--agent-url` (verbatim). Filesystem axis: `--sync-root`, `--agent-dir` (a directory inside
-  `--agent-file` is split off into agent-dir; giving both is a conflict). The URL is resolved once and
-  frozen. `self-update` is the protocol-bump path: it re-renders the agent **reusing** the existing key,
+- **`install` vs `re-install`** (`InstallCommand`, `ReinstallCommand`; the command is `re-install`, alias
+  `reinstall`): `install` is the bootstrap — new key pair, new randomized filename, and it
+  **writes/overwrites** `.psync.php`. Run over an existing config it asks "did you mean `re-install`?"
+  (default yes) and, on yes, delegates straight to `ReinstallCommand::generate()`; on no (or `--force`) it
+  does a fresh install and clobbers the config. Two mutually-exclusive HTTP modes: `--host` (composes the
+  URL = host + '/' + agentFile; host may carry a path) or `--agent-url` (verbatim). Filesystem axis:
+  `--sync-root`, `--agent-dir` (a directory inside `--agent-file` is split off into agent-dir; giving both
+  is a conflict). The URL is resolved once and frozen. `re-install` is the protocol-bump path (think
+  `apt reinstall`: rebuild the artifact, keep the config): it re-renders the agent **reusing** the existing key,
   filename and scope — the public key is derived from the private key via `Signer::publicKeyFromPrivate()`
   (`sodium_crypto_sign_publickey_from_secretkey`; the Ed25519 secret embeds its public half, so no public key
   is ever stored), and it reads the output name from `agentFile` (NOT parsed from the URL, which may not
@@ -59,13 +60,13 @@ documentation is in [README.md](README.md); here are the things important for ed
   missing/mismatched version with **HTTP 426 before auth** (`check_protocol_version`), except
   `capabilities` which stays exempt so the client can discover the agent's version. The client also
   hard-fails up front in `HttpClient::capabilities()`. Version is **not** in the signature (a tampered
-  header only self-DoSes a MITM). A `Protocol::VERSION` bump therefore forces a re-`install`/`self-update`
+  header only self-DoSes a MITM). A `Protocol::VERSION` bump therefore forces an `install`/`re-install`
   (currently **3**).
 - **Scope cross-check**: `capabilities` reports `scopeRelPath` (the baked relpath) plus the resolved
   `agentDir`/`syncRoot` (absolute, for humans; `syncRoot=null` when the scope does not resolve on the
   server). `HttpClient::capabilities()` compares the reported `scopeRelPath` against
   `Config::scopeRelPath()` (normalized via `PathRelativizer`) and **hard-fails** on a mismatch or a
-  non-resolving scope, pointing at `self-update` — before any transfer. This catches a config layout edited
+  non-resolving scope, pointing at `re-install` — before any transfer. This catches a config layout edited
   without re-deploying the agent. The comparison is **structural** (relpath), since absolute server paths
   are not comparable on the client.
 - Endpoints: `capabilities`, `list`, `hash` (NDJSON), `download` (binary framing response),
