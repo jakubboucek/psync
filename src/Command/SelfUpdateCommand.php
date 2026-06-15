@@ -60,7 +60,7 @@ final class SelfUpdateCommand extends Command
             return Command::FAILURE;
         }
 
-        $agent = new AgentBuilder()->build($publicKey, $config->protect);
+        $agent = new AgentBuilder()->build($publicKey, '', $config->protect);
 
         if (file_put_contents($agentPath, $agent) === false) {
             $io->error("Unable to write the agent to '$agentPath'.");
