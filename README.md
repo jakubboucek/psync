@@ -20,12 +20,20 @@ respecting the tiny time/memory/upload limits of cheap shared hosting.
 ## How it works
 
 1. **Install once.** `psync install` generates an **Ed25519** key pair and renders the agent — a single
-   self-contained PHP file containing only the **public** key. You upload it via FTP to the directory
-   that should become the remote root. The **private** key goes into your local config and nowhere else,
-   so even a leaked agent file lets nobody forge a request. The agent gets a **randomized filename**
-   (`psync-agent-<nonce>.php`) so its URL can't be scanned for, and it carries a header comment that
-   tells anyone who later stumbles on it that it is a maintenance tool — not a backdoor — and is safe
-   to delete.
+   self-contained PHP file containing only the **public** key. You upload it via FTP into your
+   **agent-dir** (where it must be reachable over HTTP). The **private** key goes into your local config
+   and nowhere else, so even a leaked agent file lets nobody forge a request. The agent gets a
+   **randomized filename** (`psync-agent-<nonce>.php`) so its URL can't be scanned for, and it carries a
+   header comment that tells anyone who later stumbles on it that it is a maintenance tool — not a
+   backdoor — and is safe to delete. After a version bump, `psync self-update` re-renders the agent in
+   place (same key, same layout) — you only re-upload it.
+
+   The agent's reach is a **fixed scope baked in at install** — the path from where the agent file lives
+   (**agent-dir**) to the top of the synchronized tree (**sync-root**). The two need not coincide: the
+   synced tree may sit **above** the agent (frameworks like Nette/Laravel/Symfony keep their code above
+   the public dir), **below** it (manage just `system/logs/` from an agent at the site root), or on a
+   **sibling** branch. The scope is hardcoded and never taken from a request, so it stays a fixed
+   boundary; the client cross-checks it against your config on every run.
 
 2. **Every call is a signed HTTP request.** The client signs each request with the private key; the agent
    verifies it with the public key, plus a timestamp and nonce against replay. It therefore works even
@@ -51,18 +59,17 @@ composer global require jakubboucek/psync
 
 ## Configuration
 
-`psync install` generates `.psync.php`. Fill in `url` and `mapping.local`:
+`psync install` generates and fills in `.psync.php`. All paths are **relative to the config file's own
+directory** (the project-root):
 
 ```php
 <?php
 return [
-    'url'        => 'https://example.com/psync-agent-XXXXXX.php',
-    //                       ^^^^^^^^^^^ - put here domain of your website
+    'agentUrl'   => 'https://example.com/psync-agent-XXXXXX.php', // public URL of the agent (used as-is)
     'privateKey' => 'base64…',                   // from install, keep secret
-    'mapping'    => [
-        'local' => __DIR__,                      // complete path to the local website root
-        'remote' => '/'
-    ],
+    'syncRoot'   => '',                          // top of the synchronized tree ('' = this directory)
+    'agentDir'   => 'www',                        // where the agent file is deployed ('' = sync-root)
+    'agentFile'  => 'psync-agent-XXXXXX.php',      // basename, used by self-update
     'ignore'     => ['/.git', '*.log', '/temp', '/uploads'],
     'protect'    => ['/uploads', '/temp'],       // never deleted
     'checksum'   => false,                       // like rsync -c
@@ -73,12 +80,16 @@ return [
 
 ### Config keys
 
-- **`url`** – the agent's URL (the randomized `psync-agent-XXXXXX.php` printed by `install`).
+- **`agentUrl`** – the agent's public URL, used verbatim. With `install --host` it is composed for you; with `--agent-url` you give it explicitly (e.g. when a rewrite rule routes to the agent).
 - **`privateKey`** – base64 Ed25519 key from `install`; signs every request. **Keep secret** (the config file is auto-excluded from sync so it can never be uploaded).
-- **`mapping`** – `local` = absolute path to the local website root, `remote` = path under the agent's directory on the server.
+- **`syncRoot`** – the top of the synchronized tree, relative to this file's directory (`''` = the project-root). This is the only directory the agent may touch.
+- **`agentDir`** – where the agent file is deployed, relative to this file's directory (`''` = the sync-root). The agent's scope is derived as the path agent-dir → sync-root.
+- **`agentFile`** – the agent's filename; `self-update` rewrites this file.
 - **`ignore`** / **`protect`** – see below.
 - **`checksum`** – always hash files instead of trusting size+mtime (like `rsync -c`); slower.
 - **`compress`** / **`compressSkipExt`** – gzip the payload during transfer, except for the listed (already-compressed) extensions.
+
+> The filesystem `agentDir` (used to compute the scope) and the public `agentUrl` are **independent** — psync does not track how your DocumentRoot maps to the filesystem, so it only needs the URL that reaches the agent.
 
 #### `ignore` vs `protect`
 
@@ -110,8 +121,10 @@ and a directory on the other is reported as a **type conflict** and skipped (nev
 ## Commands
 
 ```bash
-psync install [-o <file>] [-c .psync.php]        # generate agent (randomized name) + keys
-psync self-update [-c .psync.php] [-o <file>]    # regenerate the agent, keeping the key + URL
+psync install [--host <h> | --agent-url <u>] \
+              [--sync-root <dir>] [--agent-dir <dir>] [--agent-file <name>] \
+              [-c .psync.php] [-f]                # generate agent + keys, write the config
+psync self-update [-c .psync.php]                 # regenerate the agent, keeping key + URL + scope
 psync compare  [path] [-c …] [-v] [--checksum]   # list differences (transfers nothing)
 psync upload   [path] [--delete] [--dry-run]     # local → remote
 psync download [path] [--delete] [--dry-run]     # remote → local
@@ -126,10 +139,23 @@ psync download [path] [--delete] [--dry-run]     # remote → local
 
 - **`install`** is a one-time bootstrap: it generates a fresh key pair and a randomly-named agent, and
   writes (or, if you confirm, **overwrites**) `.psync.php`. Run on an existing config it first asks whether
-  you actually meant `self-update`.
+  you actually meant `self-update`. The HTTP endpoint is given either as **`--host`** (the URL is composed
+  by convention, e.g. `--host example.com` or `--host example.com/tools`) or **`--agent-url`** (the full
+  URL, stored verbatim) — not both. **`--sync-root`** / **`--agent-dir`** describe the layout (relative to
+  the project-root; defaults: sync-root = project-root, agent-dir = sync-root); **`--agent-file`** overrides
+  the randomized name (a directory in it is taken as the agent-dir).
 - **`self-update`** re-renders the agent after a protocol-version bump (a `psync …` run will tell you when
-  one is needed). It reuses the **existing key and agent filename** from the config, so nothing in
+  one is needed). It reuses the **existing key, filename and scope** from the config, so nothing in
   `.psync.php` changes — just re-upload the regenerated agent over the old one via FTP.
+
+Example layouts (run from the project-root):
+
+```bash
+psync install --host example.com                                  # agent at the root, syncs it (WordPress-style)
+psync install --host example.com --agent-dir www                  # agent in www/, syncs the app above it (Nette-style)
+psync install --host example.com --sync-root system/logs --agent-dir .   # agent at the root, syncs only system/logs/
+psync install --host example.com/tools --sync-root system/logs --agent-dir tools  # agent in tools/, manages system/logs/
+```
 
 ## Security
 
