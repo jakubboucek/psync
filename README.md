@@ -124,7 +124,7 @@ and a directory on the other is reported as a **type conflict** and skipped (nev
 psync install [--host <h> | --agent-url <u>] \
               [--sync-root <dir>] [--agent-dir <dir>] [--agent-file <name>] \
               [-c .psync.php] [-f]                # generate agent + keys, write the config
-psync re-install [-c .psync.php]                 # regenerate the agent, keeping key + URL + scope (alias: reinstall)
+psync re-install [--preserve-key] [-c .psync.php] # regenerate the agent (rotates the key by default; alias: reinstall)
 psync compare  [path] [-c …] [-v] [--checksum]   # list differences (transfers nothing)
 psync upload   [path] [--delete] [--dry-run]     # local → remote
 psync download [path] [--delete] [--dry-run]     # remote → local
@@ -144,10 +144,13 @@ psync download [path] [--delete] [--dry-run]     # remote → local
   URL, stored verbatim) — not both. **`--sync-root`** / **`--agent-dir`** describe the layout (relative to
   the project-root; defaults: sync-root = project-root, agent-dir = sync-root); **`--agent-file`** overrides
   the randomized name (a directory in it is taken as the agent-dir).
-- **`re-install`** (alias **`reinstall`**; think `apt reinstall`) re-renders the agent after a
-  protocol-version bump (a `psync …` run will tell you when one is needed). It reuses the **existing key,
-  filename and scope** from the config, so nothing in
-  `.psync.php` changes — just re-upload the regenerated agent over the old one via FTP.
+- **`re-install`** (alias **`reinstall`**; think `apt reinstall`) re-renders the agent — after a
+  protocol-version bump (a `psync …` run will tell you when one is needed), a package security fix, or just
+  to rotate the key — reusing the **filename and scope** from the config. **By default it rotates the key**:
+  a fresh pair is generated, the new public key goes into the agent and the new private key replaces the old
+  one in `.psync.php` (surgically, so your comments and other keys stay). Pass **`--preserve-key`** to keep
+  the existing key untouched. Either way, **re-upload the regenerated agent** — after a rotation the server
+  rejects every request (HTTP 403) until you do.
 
 Example layouts (run from the project-root):
 
@@ -163,6 +166,7 @@ psync install --host example.com/tools --sync-root system/logs --agent-dir tools
 - **Ed25519** signatures; the server holds only the public key. Works even over plain HTTP (the signature
   protects both integrity and identity, while a timestamp + nonce prevent replay).
 - **Keep the private key in your config secret** and out of public git.
+- **Rotate the key** periodically: `psync re-install` does it by default (then re-upload the agent). Use `--preserve-key` only when you explicitly want to keep the current key.
 - All requests are **POST** (the action in the body, not the URL) for the sake of WAFs; upload has GZ
   enabled by default even for text, so a WAF does not flag the PHP source as an RCE upload.
 - The agent strictly **sanitizes paths** (no `../`, everything stays inside the root).

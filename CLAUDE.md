@@ -41,13 +41,19 @@ documentation is in [README.md](README.md); here are the things important for ed
   does a fresh install and clobbers the config. Two mutually-exclusive HTTP modes: `--host` (composes the
   URL = host + '/' + agentFile; host may carry a path) or `--agent-url` (verbatim). Filesystem axis:
   `--sync-root`, `--agent-dir` (a directory inside `--agent-file` is split off into agent-dir; giving both
-  is a conflict). The URL is resolved once and frozen. `re-install` is the protocol-bump path (think
-  `apt reinstall`: rebuild the artifact, keep the config): it re-renders the agent **reusing** the existing key,
-  filename and scope — the public key is derived from the private key via `Signer::publicKeyFromPrivate()`
+  is a conflict). The URL is resolved once and frozen. `re-install` (think `apt reinstall`: rebuild the
+  artifact, keep the config) re-renders the agent **reusing** the filename and scope, reading the output name
+  from `agentFile` (NOT parsed from the URL, which may not contain it). It refuses a config without
+  `agentFile`, pointing at `install --force`. **By default it rotates the key** (`generate(... $rotateKey =
+  true)`): a fresh pair is generated, the new public key is baked in, and the new private key replaces the
+  old one in the config via a **surgical `str_replace` of the old base64** in the raw file (preserves
+  comments / other keys; refuses if there is no `privateKey` to replace). `--preserve-key` flips it to reuse
+  mode — the public key is then derived from the private one via `Signer::publicKeyFromPrivate()`
   (`sodium_crypto_sign_publickey_from_secretkey`; the Ed25519 secret embeds its public half, so no public key
-  is ever stored), and it reads the output name from `agentFile` (NOT parsed from the URL, which may not
-  contain it). It refuses a config without `agentFile`, pointing at `install --force`. No config change, so
-  the user only re-uploads the agent.
+  is ever stored) and the config is left untouched. `install`'s delegation rotates (passes the default). The
+  user always re-uploads the agent (after a rotation the server returns 403 until they do). Capabilities
+  cross-check is unaffected (scope unchanged; the public key is not cross-checked — auth just works once the
+  new agent is up).
 
 ## Protocol (version in `Protocol::VERSION`)
 
