@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace JakubBoucek\Psync;
 
+use Composer\InstalledVersions;
 use Symfony\Component\Console\Application;
 
 (static function (): void {
@@ -23,7 +24,11 @@ use Symfony\Component\Console\Application;
     exit(1);
 })();
 
-$app = new Application('psync', '0.1.0-dev');
+$version = class_exists(InstalledVersions::class)
+    ? (InstalledVersions::getPrettyVersion('jakubboucek/psync') ?? 'unknown')
+    : 'unknown';
+
+$app = new Application('psync', $version);
 
 $app->addCommands([
     new Command\InstallCommand(),
