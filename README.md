@@ -167,15 +167,15 @@ The most common non-trivial case: a Nette/Symfony-style project whose applicatio
 **above** the public directory, with the agent deployed into the public dir (= DocumentRoot):
 
 ```text
-my_project/                       ← project-root  (run psync here; holds .psync.php)
-├── .psync.php                      config — holds the private key, never synced
-├── docker-compose.yml              local tooling — stays on your machine
-├── phpstan.neon                    local tooling — stays on your machine
-└── web/                          ← sync-root  (the synchronized tree = the agent's reach)
+my_project/                          ← project-root  (run psync here; holds .psync.php)
+├── .psync.php                       config — holds the private key, never synced
+├── docker-compose.yml               local tooling — stays on your machine
+├── phpstan.neon                     local tooling — stays on your machine
+└── web/                             ← sync-root  (the synchronized tree = the agent's reach)
     ├── app/
     │   └── bootstrap.php            app code above the public dir — deployed, never served
     ├── vendor/                      dependencies — deployed, never served
-    └── www/                      ← agent-dir  (DocumentRoot; the agent is deployed here)
+    └── www/                         ← agent-dir  (DocumentRoot; the agent is deployed here)
         ├── index.php                front controller
         └── psync-agent-ab12cd.php   the agent → https://example.com/psync-agent-ab12cd.php
 ```
