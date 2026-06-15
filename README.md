@@ -161,6 +161,36 @@ psync install --host example.com --sync-root system/logs --agent-dir .   # agent
 psync install --host example.com/tools --sync-root system/logs --agent-dir tools  # agent in tools/, manages system/logs/
 ```
 
+### A worked example (framework app, code above the public dir)
+
+The most common non-trivial case: a Nette/Symfony-style project whose application code and dependencies live
+**above** the public directory, with the agent deployed into the public dir (= DocumentRoot):
+
+```text
+my_project/                       ← project-root  (run psync here; holds .psync.php)
+├── .psync.php                      config — holds the private key, never synced
+├── docker-compose.yml              local tooling — stays on your machine
+├── phpstan.neon                    local tooling — stays on your machine
+└── web/                          ← sync-root  (the synchronized tree = the agent's reach)
+    ├── app/
+    │   └── bootstrap.php            app code above the public dir — deployed, never served
+    ├── vendor/                      dependencies — deployed, never served
+    └── www/                      ← agent-dir  (DocumentRoot; the agent is deployed here)
+        ├── index.php                front controller
+        └── psync-agent-ab12cd.php   the agent → https://example.com/psync-agent-ab12cd.php
+```
+
+From the project-root:
+
+```bash
+psync install --host example.com --sync-root web --agent-dir web/www
+```
+
+This deploys the agent into `web/www/` (served at `https://example.com/`) and synchronizes the whole `web/`
+tree — including `app/` and `vendor/`, which sit **above** the public dir and are never reachable over HTTP.
+`docker-compose.yml` and `phpstan.neon` stay on your machine because they live at the project-root, outside
+the sync-root. The agent's baked scope is `..` — one level up from `www/` to `web/`.
+
 ## Security
 
 - **Ed25519** signatures; the server holds only the public key. Works even over plain HTTP (the signature
