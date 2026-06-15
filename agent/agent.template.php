@@ -44,19 +44,20 @@ declare(strict_types=1);
 // functions and global constants fall back to global, so no prefixing is needed.
 namespace JakubBoucek\Psync\Agent;
 
-// ---------------------------------------------------------------------------
-// Configuration (values filled in by `install`)
-// ---------------------------------------------------------------------------
 use JsonException;
 use RuntimeException;
 use Throwable;
 
+// ---------------------------------------------------------------------------
+// Configuration (values filled in by `install`)
+// ---------------------------------------------------------------------------
 $CONFIG = [
     'publicKey'       => 'PSYNC_PUBLICKEY_PLACEHOLDER', // base64 of the public key
     'protocolVersion' => 3,
     'scopeRelPath'    => PSYNC_SCOPE_PLACEHOLDER,       // baked path from __DIR__ to the sync root ('' = __DIR__)
     'protect'         => [/* PSYNC_PROTECT */],         // glob patterns that are never deleted
 ];
+
 // The synchronized root is the agent's own directory shifted by the baked scope:
 // it may descend ('system/logs'), climb ('..') or stay ('' = __DIR__). The scope is
 // fixed at install time and NEVER comes from the request, so the root stays a

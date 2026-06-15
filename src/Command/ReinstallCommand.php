@@ -112,8 +112,6 @@ final class ReinstallCommand extends Command
                 'The key was rotated. The server will reject every request (HTTP 403) until you upload '
                 . 'this new agent. Keep the new private key in the config secret.',
             );
-        } else {
-            $io->writeln('Same URL, same key, same scope – the config needs <comment>no</comment> changes.');
         }
 
         return Command::SUCCESS;

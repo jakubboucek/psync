@@ -156,26 +156,31 @@ Example layouts (run from the project-root):
 
 ```bash
 psync install --host example.com                                  # agent at the root, syncs it (WordPress-style)
-psync install --host example.com --agent-dir www                  # agent in www/, syncs the app above it (Nette-style)
+psync install --host example.com --agent-dir www                  # agent in www/, syncs the app above it (Nette/Symfony-style)
 psync install --host example.com --sync-root system/logs --agent-dir .   # agent at the root, syncs only system/logs/
 psync install --host example.com/tools --sync-root system/logs --agent-dir tools  # agent in tools/, manages system/logs/
 ```
 
 ### A worked example (framework app, code above the public dir)
 
-The most common non-trivial case: a Nette/Symfony-style project whose application code and dependencies live
+The most common enhanced case: a Nette/Symfony-style project whose application code and dependencies live
 **above** the public directory, with the agent deployed into the public dir (= DocumentRoot):
 
 ```text
-my_project/                          ← project-root  (run psync here; holds .psync.php)
+my_project/                        ← project-root  (run psync here; holds .psync.php)
 ├── .psync.php                       config — holds the private key, never synced
-├── docker-compose.yml               local tooling — stays on your machine
-├── phpstan.neon                     local tooling — stays on your machine
-└── web/                             ← sync-root  (the synchronized tree = the agent's reach)
-    ├── app/
-    │   └── bootstrap.php            app code above the public dir — deployed, never served
-    ├── vendor/                      dependencies — deployed, never served
-    └── www/                         ← agent-dir  (DocumentRoot; the agent is deployed here)
+│
+├── docker-compose.yml               some local tooling — stays on your machine, out of the sync-root
+├── phpstan.neon                     
+│
+└── web/                           ← sync-root  (the synchronized tree = the agent's reach)
+    │
+    ├── app/                         the application code, above the public dir; synced but never reachable over HTTP
+    │   └── bootstrap.php            
+    ├── vendor/                      
+    │   └── ...
+    │
+    └── www/                       ← agent-dir  (DocumentRoot; the agent is deployed here)
         ├── index.php                front controller
         └── psync-agent-ab12cd.php   the agent → https://example.com/psync-agent-ab12cd.php
 ```
