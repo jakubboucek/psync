@@ -8,6 +8,7 @@ use JakubBoucek\Psync\Console\Reporter;
 use JakubBoucek\Psync\Protocol\Protocol;
 use JakubBoucek\Psync\Protocol\Signer;
 use JakubBoucek\Psync\Protocol\Wire;
+use JakubBoucek\Psync\Sync\PathRelativizer;
 use RuntimeException;
 
 /**
@@ -17,13 +18,14 @@ use RuntimeException;
 final class HttpClient
 {
     private const string VERSION_MISMATCH = 'Protocol version mismatch: the agent rejected the request. '
-        . 'Regenerate the agent with `psync install` and re-upload it.';
+        . 'Regenerate the agent with `psync self-update` and re-upload it.';
 
     private int $timeOffset = 0;
 
     public function __construct(
         private readonly string $url,
         private readonly Signer $signer,
+        private readonly ?string $expectedScopeRelPath = null,
         private readonly ?Reporter $reporter = null,
     ) {
     }
@@ -47,11 +49,13 @@ final class HttpClient
         if ($agentVersion !== Protocol::VERSION) {
             throw new RuntimeException(sprintf(
                 'Protocol version mismatch: the agent is v%d but this psync client is v%d. '
-                . 'Regenerate the agent with `psync install` and re-upload it.',
+                . 'Regenerate the agent with `psync self-update` and re-upload it.',
                 $agentVersion,
                 Protocol::VERSION,
             ));
         }
+
+        $this->checkScope($caps);
 
         $this->reporter?->log(sprintf(
             'Server: PHP %s, post_max_size %d B, max_execution_time %s s, clock offset %+d s',
@@ -61,6 +65,39 @@ final class HttpClient
             $this->timeOffset,
         ));
         return $caps;
+    }
+
+    /**
+     * Cross-checks the deployed agent's baked scope against what the config
+     * expects, so a layout edit without a re-deploy hard-fails up front instead
+     * of the agent later rejecting (or mis-resolving) paths. Skipped when no
+     * expected scope was supplied (e.g. a capabilities-only probe).
+     *
+     * @param array<string, mixed> $caps
+     */
+    private function checkScope(array $caps): void
+    {
+        if ($this->expectedScopeRelPath === null) {
+            return;
+        }
+
+        $reported = (string) ($caps['scopeRelPath'] ?? '');
+        if (PathRelativizer::normalize($reported) !== PathRelativizer::normalize($this->expectedScopeRelPath)) {
+            throw new RuntimeException(sprintf(
+                "Agent scope mismatch: the deployed agent syncs '%s' relative to its own directory, "
+                . "but the config expects '%s'. Regenerate the agent with `psync self-update` and re-upload it.",
+                $reported,
+                $this->expectedScopeRelPath,
+            ));
+        }
+
+        if (($caps['syncRoot'] ?? null) === null) {
+            throw new RuntimeException(sprintf(
+                "Agent scope does not resolve on the server: the baked path '%s' points outside the agent's "
+                . 'reachable tree. Check agent-dir/sync-root and run `psync self-update`.',
+                $reported,
+            ));
+        }
     }
 
     /**

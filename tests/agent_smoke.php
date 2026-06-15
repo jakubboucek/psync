@@ -12,6 +12,7 @@ declare(strict_types=1);
  * The rendering here is a simplified copy of what `install` will do (phase 4).
  */
 
+use JakubBoucek\Psync\Install\AgentBuilder;
 use JakubBoucek\Psync\Protocol\Protocol;
 use JakubBoucek\Psync\Protocol\Signer;
 use JakubBoucek\Psync\Protocol\Wire;
@@ -35,9 +36,9 @@ if ($mode === 'render') {
     file_put_contents($dir . '/Žluťoučký kůň.txt', "weird\n");
 
     $pair = Signer::generateKeyPair();
-    $tpl = file_get_contents(__DIR__ . '/../agent/agent.template.php');
-    $tpl = str_replace('PSYNC_PUBLICKEY_PLACEHOLDER', $pair['public'], $tpl);
-    file_put_contents($dir . '/agent.php', $tpl);
+    // Agent sits at the root of the sample tree, so its scope is empty (= __DIR__).
+    $agent = new AgentBuilder()->build($pair['public'], '', []);
+    file_put_contents($dir . '/agent.php', $agent);
 
     echo $pair['private'] . "\n";
     exit(0);
