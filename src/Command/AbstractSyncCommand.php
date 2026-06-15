@@ -64,7 +64,12 @@ abstract class AbstractSyncCommand extends Command
 
     protected function buildHttpClient(Config $config, ?Reporter $reporter = null): HttpClient
     {
-        return new HttpClient($config->url, new Signer($config->requirePrivateKey()), $reporter);
+        return new HttpClient(
+            $config->url,
+            new Signer($config->requirePrivateKey()),
+            $config->scopeRelPath(),
+            $reporter,
+        );
     }
 
     /**

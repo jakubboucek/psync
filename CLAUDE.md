@@ -7,18 +7,53 @@ documentation is in [README.md](README.md); here are the things important for ed
 ## Architecture
 
 - **Client** (`src/`, namespace `JakubBoucek\Psync\`) — Symfony Console, installable as `composer global`.
-- **Agent** (`agent/agent.template.php`) — a template; `install` bakes in the public key and
-  the protect-list (placeholders `PSYNC_PUBLICKEY_PLACEHOLDER` and `/* PSYNC_PROTECT */`).
-  Rendered by `JakubBoucek\Psync\Install\AgentBuilder`. `install` writes it under a **randomized
-  filename** `psync-agent-<nonce>.php` (6 hex chars via `random_bytes(3)`) so the URL can't be
-  scanned for; pass `-o` to override. The template's header comment is an on-purpose reassurance for
-  anyone auditing the site later (it's a maintenance tool, not a webshell; safe to delete) — keep it.
-  The agent lives in its own namespace `JakubBoucek\Psync\Agent` purely so its ~30 procedural
-  functions/constants don't pollute or clash (e.g. `handle_upload`) with a host project in an IDE; it
-  runs as its own HTTP entry point. Built-in functions and global constants fall back to global inside
-  a namespace, so the agent body stays unqualified (no prefixing needed).
-- The rich config (mapping, ignore) lives **on the client**; the agent only knows the public key, its own root
-  (`__DIR__`), and the protect-list. That is why `install` is repeated only on key rotation / protocol change.
+- **Agent** (`agent/agent.template.php`) — a template; `install` bakes in the public key, the **scope**
+  and the protect-list (placeholders `PSYNC_PUBLICKEY_PLACEHOLDER`, bareword `PSYNC_SCOPE_PLACEHOLDER`,
+  and `/* PSYNC_PROTECT */`). Rendered by `JakubBoucek\Psync\Install\AgentBuilder` (the scope is injected
+  via `var_export`, like protect). `install` writes it under a **randomized filename**
+  `psync-agent-<nonce>.php` (6 hex chars via `random_bytes(3)`) so the URL can't be scanned for; override
+  with `--agent-file`. The template's header comment is an on-purpose reassurance for anyone auditing the
+  site later (it's a maintenance tool, not a webshell; safe to delete) — keep it. The agent lives in its
+  own namespace `JakubBoucek\Psync\Agent` purely so its ~30 procedural functions/constants don't pollute
+  or clash (e.g. `handle_upload`) with a host project in an IDE; it runs as its own HTTP entry point.
+  Built-in functions and global constants fall back to global inside a namespace, so the agent body stays
+  unqualified (no prefixing needed).
+- **Three directories, all relative to the project-root** (the config file's own directory): **sync-root**
+  (top of the synced tree = the agent's remote root), **agent-dir** (where the agent file is deployed), and
+  the **agent URL** (public HTTP endpoint, stored verbatim). They are **not** required to nest: sync-root
+  may be above, below or aside from agent-dir. The agent's remote root is no longer `__DIR__` but
+  `scope_root(__DIR__, scopeRelPath)` where `scopeRelPath` is the baked path **agent-dir → sync-root**
+  (may be `..`, `system/logs`, `../system/logs`, or `''` = `__DIR__`). The scope is fixed at install time
+  and **never** read from a request, so the root stays a compile-time boundary even when it climbs above
+  `__DIR__`. The relpath is computed by `Sync\PathRelativizer` (shared by install, `Config::scopeRelPath()`
+  and the client cross-check) and is **not stored** in the config — it is recomputed from `agentDir` +
+  `syncRoot` so it can never drift.
+- The rich config lives **on the client**; the agent only knows the public key, its baked scope and the
+  protect-list. That is why agent (re)generation is needed only on key rotation / protocol change.
+- **Config format** (`Config::load`, flat fields, **no `mapping` block** — that is the v1.0 layout and is
+  rejected with a migration hint pointing at `install --force`): `agentUrl` (verbatim, used by `HttpClient`),
+  `syncRoot` + `agentDir` + `agentFile` (relative to the config dir), `privateKey`, and the behavior flags.
+  `localRoot` is `syncRoot` resolved against the config dir (what the client walks).
+- **`install` vs `re-install`** (`InstallCommand`, `ReinstallCommand`; the command is `re-install`, alias
+  `reinstall`): `install` is the bootstrap — new key pair, new randomized filename, and it
+  **writes/overwrites** `.psync.php`. Run over an existing config it asks "did you mean `re-install`?"
+  (default yes) and, on yes, delegates straight to `ReinstallCommand::generate()`; on no (or `--force`) it
+  does a fresh install and clobbers the config. Two mutually-exclusive HTTP modes: `--host` (composes the
+  URL = host + '/' + agentFile; host may carry a path) or `--agent-url` (verbatim). Filesystem axis:
+  `--sync-root`, `--agent-dir` (a directory inside `--agent-file` is split off into agent-dir; giving both
+  is a conflict). The URL is resolved once and frozen. `re-install` (think `apt reinstall`: rebuild the
+  artifact, keep the config) re-renders the agent **reusing** the filename and scope, reading the output name
+  from `agentFile` (NOT parsed from the URL, which may not contain it). It refuses a config without
+  `agentFile`, pointing at `install --force`. **By default it rotates the key** (`generate(... $rotateKey =
+  true)`): a fresh pair is generated, the new public key is baked in, and the new private key replaces the
+  old one in the config via a **surgical `str_replace` of the old base64** in the raw file (preserves
+  comments / other keys; refuses if there is no `privateKey` to replace). `--preserve-key` flips it to reuse
+  mode — the public key is then derived from the private one via `Signer::publicKeyFromPrivate()`
+  (`sodium_crypto_sign_publickey_from_secretkey`; the Ed25519 secret embeds its public half, so no public key
+  is ever stored) and the config is left untouched. `install`'s delegation rotates (passes the default). The
+  user always re-uploads the agent (after a rotation the server returns 403 until they do). Capabilities
+  cross-check is unaffected (scope unchanged; the public key is not cross-checked — auth just works once the
+  new agent is up).
 
 ## Protocol (version in `Protocol::VERSION`)
 
@@ -31,7 +66,15 @@ documentation is in [README.md](README.md); here are the things important for ed
   missing/mismatched version with **HTTP 426 before auth** (`check_protocol_version`), except
   `capabilities` which stays exempt so the client can discover the agent's version. The client also
   hard-fails up front in `HttpClient::capabilities()`. Version is **not** in the signature (a tampered
-  header only self-DoSes a MITM). A `Protocol::VERSION` bump therefore forces a re-`install`.
+  header only self-DoSes a MITM). A `Protocol::VERSION` bump therefore forces an `install`/`re-install`
+  (currently **3**).
+- **Scope cross-check**: `capabilities` reports `scopeRelPath` (the baked relpath) plus the resolved
+  `agentDir`/`syncRoot` (absolute, for humans; `syncRoot=null` when the scope does not resolve on the
+  server). `HttpClient::capabilities()` compares the reported `scopeRelPath` against
+  `Config::scopeRelPath()` (normalized via `PathRelativizer`) and **hard-fails** on a mismatch or a
+  non-resolving scope, pointing at `re-install` — before any transfer. This catches a config layout edited
+  without re-deploying the agent. The comparison is **structural** (relpath), since absolute server paths
+  are not comparable on the client.
 - Endpoints: `capabilities`, `list`, `hash` (NDJSON), `download` (binary framing response),
   `upload` (binary framing body, NDJSON response), `delete` (NDJSON), `mkdir` (NDJSON).
 
@@ -126,8 +169,9 @@ The client is PHP 8.4 on the host; the agent only ever runs on real **PHP 7.4** 
 docker compose up -d
 # Host reaches the agent at http://localhost:8088/agent.php ;
 # the client *container* reaches it at http://server/agent.php (compose network).
-# A test config is a gitignored tests/*.config.php with url, privateKey, and
-# mapping.local = the CONTAINER path /app/tests/local (the repo is mounted at /app).
+# A test config is a gitignored tests/*.config.php with agentUrl, privateKey, and
+# syncRoot/agentDir/agentFile (paths relative to the config's dir, i.e. /app/tests;
+# the repo is mounted at /app). Easiest is to let `install` write it (see below).
 docker compose exec -T client php bin/psync compare -c tests/<x>.config.php
 ```
 - **Agent-only smoke**: `php tests/agent_smoke.php render tests/remote > tests/.smoke_priv` →

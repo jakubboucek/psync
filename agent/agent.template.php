@@ -26,7 +26,7 @@
  * Learn more / verify the source: https://github.com/jakubboucek/psync
  *
  * ───────────────────────────────────────────────────────────────────────────
- * GENERATED FILE — do not edit by hand; regenerate with `psync install`.
+ * GENERATED FILE — do not edit by hand; regenerate with `psync re-install`.
  * Target compatibility: PHP 7.4+ (no Composer dependencies, only ext-sodium).
  * ───────────────────────────────────────────────────────────────────────────
  * @noinspection AutoloadingIssuesInspection
@@ -44,19 +44,25 @@ declare(strict_types=1);
 // functions and global constants fall back to global, so no prefixing is needed.
 namespace JakubBoucek\Psync\Agent;
 
-// ---------------------------------------------------------------------------
-// Configuration (values filled in by `install`)
-// ---------------------------------------------------------------------------
 use JsonException;
 use RuntimeException;
 use Throwable;
 
+// ---------------------------------------------------------------------------
+// Configuration (values filled in by `install`)
+// ---------------------------------------------------------------------------
 $CONFIG = [
     'publicKey'       => 'PSYNC_PUBLICKEY_PLACEHOLDER', // base64 of the public key
-    'protocolVersion' => 2,
-    'root'            => __DIR__,                       // remote root = agent's directory
+    'protocolVersion' => 3,
+    'scopeRelPath'    => PSYNC_SCOPE_PLACEHOLDER,       // baked path from __DIR__ to the sync root ('' = __DIR__)
     'protect'         => [/* PSYNC_PROTECT */],         // glob patterns that are never deleted
 ];
+
+// The synchronized root is the agent's own directory shifted by the baked scope:
+// it may descend ('system/logs'), climb ('..') or stay ('' = __DIR__). The scope is
+// fixed at install time and NEVER comes from the request, so the root stays a
+// compile-time boundary even when it lies above __DIR__.
+$CONFIG['root'] = scope_root(__DIR__, (string) $CONFIG['scopeRelPath']);
 
 // ---------------------------------------------------------------------------
 // Protocol constants (must match the client – JakubBoucek\Psync\Protocol\Protocol)
@@ -385,6 +391,15 @@ function json_body($body): array
 function handle_capabilities(array $CONFIG): void
 {
     header('Content-Type: application/json; charset=utf-8');
+
+    // Expose the baked scope so the client can verify the deployed agent matches
+    // its config (a layout change without a re-deploy = a hard-fail on the client).
+    // scopeRelPath is the mechanical key; agentDir/syncRoot are for humans.
+    // syncRoot === null means the baked scope does not resolve on this server.
+    $rel = (string) ($CONFIG['scopeRelPath'] ?? '');
+    $agentDir = realpath(__DIR__);
+    $syncRoot = realpath(($rel === '' || $rel === '.') ? __DIR__ : __DIR__ . '/' . $rel);
+
     $caps = [
         'protocolVersion'       => (int) $CONFIG['protocolVersion'],
         'serverTime'            => time(),
@@ -399,6 +414,9 @@ function handle_capabilities(array $CONFIG): void
         'setTimeLimitAvailable' => set_time_limit_available(),
         'hashAlgos'             => array_values(array_intersect(['md5', 'sha1', 'crc32b'], hash_algos())),
         'zlibOutputCompression' => !empty($CONFIG['_zlibOutputCompression']),
+        'scopeRelPath'          => $rel,
+        'agentDir'              => $agentDir !== false ? $agentDir : __DIR__,
+        'syncRoot'              => $syncRoot !== false ? $syncRoot : null,
     ];
     echo json_encode($caps, JSON_THROW_ON_ERROR);
 }
@@ -1034,6 +1052,22 @@ function walk_files(string $root, string $base, callable $cb): void
             $stack[] = $sd;
         }
     }
+}
+
+/**
+ * Resolves the synchronized root from the agent's own directory and the baked
+ * scope (which may descend, climb '..', or be empty for __DIR__). The scope is
+ * fixed at install time, never from the request, so this is a compile-time
+ * boundary. Returns the realpath when it resolves, otherwise a best-effort
+ * string (a non-resolving root is reported as misconfigured via capabilities
+ * and the client hard-fails before any transfer).
+ */
+function scope_root(string $dir, string $rel): string
+{
+    $rel = trim(str_replace('\\', '/', $rel));
+    $candidate = ($rel === '' || $rel === '.') ? $dir : $dir . '/' . $rel;
+    $real = realpath($candidate);
+    return $real !== false ? $real : rtrim($candidate, '/');
 }
 
 /**

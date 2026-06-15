@@ -18,7 +18,7 @@ final class Protocol
      * client also hard-fails up front from `capabilities`. A bump therefore
      * forces a re-`install` of the agent.
      */
-    public const int VERSION = 2;
+    public const int VERSION = 3;
 
     public const string HEADER_VERSION = 'X-Psync-Version';
     public const string HEADER_TS = 'X-Psync-Ts';
