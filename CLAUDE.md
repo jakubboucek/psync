@@ -127,17 +127,17 @@ documentation is in [README.md](README.md); here are the things important for ed
 - **Deletion**: `protect` is filtered by both client and agent (two lines of defense). Protect prevents **deletion**,
   not overwriting during download (extra protected directories typically belong to `ignore` as well).
 - **Agent self-protection** (the agent must never overwrite/delete/expose its own file — a local delete or
-  edit of the rendered agent must NOT propagate to the server). Two layers: client auto-ignore (above) +
-  an **agent-side backstop** that is identity-based, NOT path/pattern-based, so a future bug in scope /
-  sync-root / ignore can't bypass it. At startup the agent captures its own `dev`+`ino` (`__FILE__`); the
-  helper `is_self()` compares the resolved absolute path against it (with a `realpath` fallback for
-  platforms with unreliable inodes) — immune to scope, symlink and hardlink aliasing. Wired into every
-  handler: `walk_files`/`list` **skips** itself (free via the already-taken `stat`, so the agent never
-  appears in compare output), `hash`/`download` skip (read = silent), `upload`/`delete`/`mkdir` **refuse
-  per-file** with `'refusing to modify the psync agent'` (run continues, exits non-zero — by design, not a
-  hard abort of the batch). Covered by `tests/agent_smoke.php` (list-absence, delete-refusal, hash-null).
-  NB: identity is path-based at the inode level; a hardlink alias can't harm the agent anyway because
-  writes are atomic (tmp+rename replaces a *different* dir entry) and delete is `unlink`-by-name.
+  edit of the rendered agent must NOT propagate to the server). Two layers: client auto-ignore (above) + an
+  **agent-side backstop** — the one-line `is_self($abs)` = `realpath($abs) === __FILE__`. The comparison is
+  on the already-**resolved** absolute path, i.e. exactly the path the OS would act on, so it's immune to
+  however the client path was built (scope / sync-root / ignore mask) and also catches a symlink alias
+  (`realpath` resolves it). Wired into every handler: `walk_files`/`list` **skips** itself (so the agent
+  never appears in compare output), `hash`/`download` skip (read = silent), `upload`/`delete`/`mkdir`
+  **refuse per-file** with `'refusing to modify the psync agent'` (run continues, exits non-zero — by
+  design, not a hard abort of the batch). Covered by `tests/agent_smoke.php` (list-absence, delete-refusal,
+  hash-null). We deliberately do NOT use inode/dev identity: it would only add hardlink detection, which is
+  moot (writes are atomic tmp+rename on a *different* dir entry, delete is `unlink`-by-name, and the agent
+  holds only a public key) — and a hardlink can't be created over the protocol anyway.
 - **Directories** (`Walker`/agent `walk_files` emit them, `Comparator` compares by presence): created on
   sync (incl. empty ones — that is the whole point) via `mkdir -p` (remote = `mkdir` action, local =
   direct). Removed only with `--delete`, **non-recursive**: the client orders deletions deepest-first
