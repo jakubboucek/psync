@@ -84,6 +84,17 @@ const CHUNK = 65536;
     // The client needs to know them (batching, server info).
     $CONFIG['_maxExecutionTime'] = (int) ini_get('max_execution_time');
     $CONFIG['_zlibOutputCompression'] = (bool)ini_get('zlib.output_compression');
+
+    // Capture this file's own identity so the agent can refuse to ever overwrite,
+    // delete or expose ITSELF (see is_self()). Identity is by device+inode — immune
+    // to how a client path was built (scope, sync-root, symlinks, even hardlinks) —
+    // with a realpath fallback for platforms with unreliable inodes.
+    $selfStat = @stat(__FILE__);
+    $CONFIG['_selfDev'] = $selfStat !== false ? $selfStat['dev'] : null;
+    $CONFIG['_selfIno'] = $selfStat !== false && $selfStat['ino'] !== 0 ? $selfStat['ino'] : null;
+    $selfReal = realpath(__FILE__);
+    $CONFIG['_selfReal'] = $selfReal !== false ? $selfReal : __FILE__;
+
     prepare_runtime();
 
     try {
@@ -454,7 +465,12 @@ function handle_list(array $CONFIG, array $req): void
         return;
     }
 
-    walk_files($root, $base, function (string $rel, $stat, $isDir): void {
+    walk_files($root, $base, function (string $rel, $stat, $isDir) use ($CONFIG): void {
+        // Never expose the agent's own file (read = skip), so it never appears in
+        // the compare output and can never be marked for transfer/deletion.
+        if (is_self_stat($stat, $CONFIG)) {
+            return;
+        }
         // A regular file omits 't' (lazy default); a directory carries t='d'.
         $obj = ['p' => base64_encode($rel), 's' => $isDir ? 0 : (int) $stat['size'], 'm' => (int) $stat['mtime']];
         if ($isDir) {
@@ -488,7 +504,8 @@ function handle_hash(array $CONFIG, array $req): void
             continue;
         }
         $abs = resolve_scope($root, $rel);
-        if ($abs === null || !is_file($abs)) {
+        if ($abs === null || !is_file($abs) || is_self($abs, $CONFIG)) {
+            // The agent never hashes itself (read = skip); reported as missing.
             emit(['p' => $p64, 'h' => null]);
             continue;
         }
@@ -547,6 +564,11 @@ function handle_delete(array $CONFIG, array $req): void
         $abs = resolve_scope($root, $rel);
         if ($abs === null) {
             emit(['p' => $p64, 'ok' => false, 'err' => 'path outside scope']);
+            continue;
+        }
+        if (is_self($abs, $CONFIG)) {
+            // Never let a sync delete the agent itself (write = refuse, loud).
+            emit(['p' => $p64, 'ok' => false, 'err' => 'refusing to modify the psync agent']);
             continue;
         }
         if (is_link($abs)) {
@@ -669,6 +691,11 @@ function handle_mkdir(array $CONFIG, array $req): void
             emit(['p' => $p64, 'ok' => false, 'err' => 'path outside scope']);
             continue;
         }
+        if (is_self($abs, $CONFIG)) {
+            // Never let a sync clobber the agent itself (write = refuse, loud).
+            emit(['p' => $p64, 'ok' => false, 'err' => 'refusing to modify the psync agent']);
+            continue;
+        }
         if (is_dir($abs)) {
             emit(['p' => $p64, 'ok' => true]); // already there = goal met
             continue;
@@ -714,8 +741,8 @@ function handle_download(array $CONFIG, array $req): void
             continue;
         }
         $abs = resolve_scope($root, $rel);
-        if ($abs === null || !is_file($abs)) {
-            continue;
+        if ($abs === null || !is_file($abs) || is_self($abs, $CONFIG)) {
+            continue; // never serve the agent's own file (read = skip)
         }
         $size = (int) filesize($abs);
         $mtime = (int) filemtime($abs);
@@ -791,6 +818,13 @@ function handle_upload(array $CONFIG, $body): void
         if ($abs === null) {
             skip_bytes($in, $h['payloadLen']);
             emit(['p' => base64_encode($rel), 'ok' => false, 'err' => 'path outside scope']);
+            continue;
+        }
+        if (is_self($abs, $CONFIG)) {
+            // Never let a sync overwrite the agent itself (write = refuse, loud);
+            // the run continues with the rest of the batch.
+            skip_bytes($in, $h['payloadLen']);
+            emit(['p' => base64_encode($rel), 'ok' => false, 'err' => 'refusing to modify the psync agent']);
             continue;
         }
         $err = write_upload_file($abs, $in, $h);
@@ -1117,6 +1151,38 @@ function path_within(string $path, string $root): bool
     $path = rtrim($path, '/');
     $root = rtrim($root, '/');
     return $path === $root || strncmp($path . '/', $root . '/', strlen($root) + 1) === 0;
+}
+
+/**
+ * Is the absolute $abs the agent's OWN file? Identity by device+inode (captured
+ * at startup), so it cannot be fooled by a manipulated sync-root/scope, a
+ * symlink or a hardlink alias; falls back to a canonical-path comparison where
+ * the inode is unavailable. The agent must NEVER overwrite, delete or expose
+ * itself — this is the low-level, single-source guard behind every handler.
+ */
+function is_self(string $abs, array $CONFIG): bool
+{
+    $st = @stat($abs);
+    if ($st !== false && isset($CONFIG['_selfDev'], $CONFIG['_selfIno']) && $st['ino'] !== 0) {
+        return $st['dev'] === $CONFIG['_selfDev'] && $st['ino'] === $CONFIG['_selfIno'];
+    }
+    $real = realpath($abs);
+    return $real !== false && $real === ($CONFIG['_selfReal'] ?? null);
+}
+
+/**
+ * Same identity test from an already-taken stat() (the listing walk has it for
+ * free, so no extra syscall). A null/zero inode falls through to false: the
+ * file then still surfaces in the listing, but the realpath-backed is_self()
+ * in the per-path handlers remains the authoritative backstop.
+ */
+function is_self_stat($stat, array $CONFIG): bool
+{
+    return is_array($stat)
+        && isset($stat['dev'], $stat['ino'], $CONFIG['_selfDev'], $CONFIG['_selfIno'])
+        && $stat['ino'] !== 0
+        && $stat['dev'] === $CONFIG['_selfDev']
+        && $stat['ino'] === $CONFIG['_selfIno'];
 }
 
 function ini_bytes(string $val): int

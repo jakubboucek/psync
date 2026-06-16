@@ -97,9 +97,12 @@ documentation is in [README.md](README.md); here are the things important for ed
 - **2-phase comparison** (`Comparator`): listing → candidates (identical size, different mtime) →
   md5 (locally + in batches on the server, ≤100 MB/≤1000). `--checksum` hashes everything.
 - **Auto-ignored, never uploaded** (`AbstractSyncCommand::buildIgnore`): the state cache
-  (`.psync-state.json`) and the **config file itself** (it holds the private key) — the config is ignored
-  by its real path relative to `localRoot`, regardless of how `--config` named/located it, so the key
-  can't leak even with a renamed/relocated config.
+  (`.psync-state.json`), the **config file itself** (it holds the private key) — ignored by its real path
+  relative to `localRoot`, regardless of how `--config` named/located it, so the key can't leak even with a
+  renamed/relocated config — and the **deployed agent file** (when it lies inside the synced tree). The
+  agent's relpath is derived from `agentDir`+`syncRoot` via `PathRelativizer` (same math as the scope, so it
+  can't drift; `null`/skipped when the agent is above/aside the tree). This is the **client half** of the
+  agent self-protection (see "Watch out").
 - **StateCache** (`.psync-state.json` in the local root, auto-ignored): key `base64(rel)`,
   the equality verdict is reused only when the local size+mtime and the remote mtime match. This way a
   file that only has a differing mtime (FTP clock mismatch) is not hashed repeatedly.
@@ -123,6 +126,18 @@ documentation is in [README.md](README.md); here are the things important for ed
   signature would throw an exception → HTTP 500 instead of 403.
 - **Deletion**: `protect` is filtered by both client and agent (two lines of defense). Protect prevents **deletion**,
   not overwriting during download (extra protected directories typically belong to `ignore` as well).
+- **Agent self-protection** (the agent must never overwrite/delete/expose its own file — a local delete or
+  edit of the rendered agent must NOT propagate to the server). Two layers: client auto-ignore (above) +
+  an **agent-side backstop** that is identity-based, NOT path/pattern-based, so a future bug in scope /
+  sync-root / ignore can't bypass it. At startup the agent captures its own `dev`+`ino` (`__FILE__`); the
+  helper `is_self()` compares the resolved absolute path against it (with a `realpath` fallback for
+  platforms with unreliable inodes) — immune to scope, symlink and hardlink aliasing. Wired into every
+  handler: `walk_files`/`list` **skips** itself (free via the already-taken `stat`, so the agent never
+  appears in compare output), `hash`/`download` skip (read = silent), `upload`/`delete`/`mkdir` **refuse
+  per-file** with `'refusing to modify the psync agent'` (run continues, exits non-zero — by design, not a
+  hard abort of the batch). Covered by `tests/agent_smoke.php` (list-absence, delete-refusal, hash-null).
+  NB: identity is path-based at the inode level; a hardlink alias can't harm the agent anyway because
+  writes are atomic (tmp+rename replaces a *different* dir entry) and delete is `unlink`-by-name.
 - **Directories** (`Walker`/agent `walk_files` emit them, `Comparator` compares by presence): created on
   sync (incl. empty ones — that is the whole point) via `mkdir -p` (remote = `mkdir` action, local =
   direct). Removed only with `--delete`, **non-recursive**: the client orders deletions deepest-first
