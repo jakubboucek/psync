@@ -40,16 +40,18 @@ final class ReinstallCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        return $this->generate($io, (string) $input->getOption('config'), !(bool) $input->getOption('preserve-key'));
+        $version = $this->getApplication()?->getVersion() ?? 'unknown';
+        return $this->generate($io, (string) $input->getOption('config'), !(bool) $input->getOption('preserve-key'), $version);
     }
 
     /**
      * Re-renders the agent from the existing config and writes it under the same
      * filename. With $rotateKey a fresh pair is generated and the new private key
      * is written back into the config; otherwise the existing key is reused.
-     * Shared with `install` so its "did you mean re-install?" prompt can delegate here.
+     * Shared with `install` so its "did you mean re-install?" prompt can delegate here;
+     * `$version` is baked into the agent header comment (informational only).
      */
-    public function generate(SymfonyStyle $io, string $configPath, bool $rotateKey = true): int
+    public function generate(SymfonyStyle $io, string $configPath, bool $rotateKey = true, string $version = 'unknown'): int
     {
         if (!is_file($configPath)) {
             $io->error("Configuration file does not exist: $configPath. Run `install` first.");
@@ -79,7 +81,7 @@ final class ReinstallCommand extends Command
         }
 
         $scopeRelPath = $config->scopeRelPath();
-        $agent = new AgentBuilder()->build($publicKey, $scopeRelPath, $config->protect);
+        $agent = new AgentBuilder()->build($publicKey, $scopeRelPath, $config->protect, $version);
 
         $projectRoot = dirname((string) $config->configPath);
         $agentLocalDir = ($config->agentDir !== '' && is_dir($projectRoot . '/' . $config->agentDir))

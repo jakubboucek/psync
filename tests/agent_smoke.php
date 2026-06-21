@@ -37,7 +37,7 @@ if ($mode === 'render') {
 
     $pair = Signer::generateKeyPair();
     // Agent sits at the root of the sample tree, so its scope is empty (= __DIR__).
-    $agent = new AgentBuilder()->build($pair['public'], '', []);
+    $agent = new AgentBuilder()->build($pair['public'], '', [], 'smoke-test');
     file_put_contents($dir . '/agent.php', $agent);
 
     echo $pair['private'] . "\n";

@@ -27,6 +27,7 @@
  *
  * ───────────────────────────────────────────────────────────────────────────
  * GENERATED FILE — do not edit by hand; regenerate with `psync re-install`.
+ * Generated: {{ PsyncGeneratedAt }}  ·  psync {{ PsyncVersion }}
  * Target compatibility: PHP 7.4+ (no Composer dependencies, only ext-sodium).
  * ───────────────────────────────────────────────────────────────────────────
  * @noinspection AutoloadingIssuesInspection

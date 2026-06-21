@@ -12,8 +12,14 @@ documentation is in [README.md](README.md); here are the things important for ed
   and `/* PSYNC_PROTECT */`). Rendered by `JakubBoucek\Psync\Install\AgentBuilder` (the scope is injected
   via `var_export`, like protect). `install` writes it under a **randomized filename**
   `psync-agent-<nonce>.php` (6 hex chars via `random_bytes(3)`) so the URL can't be scanned for; override
-  with `--agent-file`. The template's header comment is an on-purpose reassurance for anyone auditing the
-  site later (it's a maintenance tool, not a webshell; safe to delete) — keep it. The agent lives in its
+  with `--agent-file`. The header comment also carries an **informational generation stamp**
+  (`{{ PsyncGeneratedAt }}` = local time with offset via `date('Y-m-d H:i:sP')`, and `{{ PsyncVersion }}` =
+  the client's Composer version, passed down from the command via `getApplication()->getVersion()`). These
+  two live **inside the `/** */` comment**, so they intentionally use the newer `{{ }}` + PascalCase
+  placeholder style (the old SCREAMING_SNAKE barewords stay until a future migration) and are **purely
+  informational** — they do not touch the protocol, auth or `capabilities`. The template's header comment is
+  an on-purpose reassurance for anyone auditing the site later (it's a maintenance tool, not a webshell;
+  safe to delete) — keep it. The agent lives in its
   own namespace `JakubBoucek\Psync\Agent` purely so its ~30 procedural functions/constants don't pollute
   or clash (e.g. `handle_upload`) with a host project in an IDE; it runs as its own HTTP entry point.
   Built-in functions and global constants fall back to global inside a namespace, so the agent body stays

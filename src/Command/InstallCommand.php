@@ -48,6 +48,10 @@ final class InstallCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
 
+        // Baked into the agent header (informational). The delegated ReinstallCommand is
+        // detached from the Application, so we resolve it here and pass it down explicitly.
+        $version = $this->getApplication()?->getVersion() ?? 'unknown';
+
         $configPath = (string) $input->getOption('config');
         $force = (bool) $input->getOption('force');
 
@@ -56,7 +60,7 @@ final class InstallCommand extends Command
         // The delegated re-install rotates the key by default, like a direct `re-install`.
         if (is_file($configPath) && !$force) {
             if ($io->confirm("An existing config '$configPath' was found. `install` creates a brand-new key and agent and overwrites the config. Did you mean `re-install` instead (regenerate the agent, rotate the key, keep the existing URL and layout)?", true)) {
-                return new ReinstallCommand()->generate($io, $configPath);
+                return new ReinstallCommand()->generate($io, $configPath, true, $version);
             }
             $io->warning("Proceeding with a fresh install – '$configPath' will be overwritten.");
         }
@@ -134,7 +138,7 @@ final class InstallCommand extends Command
 
         // --- render + write the agent ----------------------------------------------------
         $pair = Signer::generateKeyPair();
-        $agent = new AgentBuilder()->build($pair['public'], $scopeRelPath, self::DEFAULT_PROTECT);
+        $agent = new AgentBuilder()->build($pair['public'], $scopeRelPath, self::DEFAULT_PROTECT, $version);
 
         $agentLocalDir = ($agentDir !== '' && is_dir($projectRoot . '/' . $agentDir))
             ? $projectRoot . '/' . $agentDir
