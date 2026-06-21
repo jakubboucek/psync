@@ -126,6 +126,9 @@ if ($mode === 'check') {
     $assert(isset($files['empty']) && ($files['empty']['t'] ?? null) === 'd', "empty dir listed with t='d'");
     $assert(isset($files['sub']) && ($files['sub']['t'] ?? null) === 'd', "sub/ listed as directory");
     $assert(!array_key_exists('t', $files['a.txt']), "regular file omits 't'");
+    // Self-protection: the agent must never list its own file, so it can never
+    // appear in the compare output (and thus never be transferred or deleted).
+    $assert(!isset($files['agent.php']), 'agent file is NOT listed (self-protection)');
 
     echo "list scope + traversal guard:\n";
     [, $resp] = $call('list', ['path' => 'sub'], $signer);
@@ -190,6 +193,19 @@ if ($mode === 'check') {
     [, $resp] = $call('delete', ['paths' => [['p' => Wire::encPath('a.txt'), 't' => 'x']]], $signer);
     $r = $parse($resp);
     $assert(($r['a.txt']['ok'] ?? null) === false && ($r['a.txt']['err'] ?? '') === 'unsupported entry type', 'unknown declared type → rejected');
+
+    echo "self-protection (agent refuses to touch its own file):\n";
+    // delete: write = loud per-file refusal, agent.php stays on disk.
+    [, $resp] = $call('delete', ['paths' => [['p' => Wire::encPath('agent.php')]]], $signer);
+    $r = $parse($resp);
+    $assert(
+        ($r['agent.php']['ok'] ?? null) === false && ($r['agent.php']['err'] ?? '') === 'refusing to modify the psync agent',
+        'delete of the agent → refused',
+    );
+    // hash: read = skipped, reported as missing (h:null).
+    [, $resp] = $call('hash', ['paths' => [Wire::encPath('agent.php')]], $signer);
+    $r = $parse($resp);
+    $assert(array_key_exists('agent.php', $r) && $r['agent.php']['h'] === null, 'hash of the agent → h:null (skipped)');
 
     echo $failed === 0 ? "\nAGENT OK\n" : "\nFAILED: $failed\n";
     exit($failed === 0 ? 0 : 1);

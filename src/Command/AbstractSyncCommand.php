@@ -11,6 +11,7 @@ use JakubBoucek\Psync\State\StateCache;
 use JakubBoucek\Psync\Sync\Comparator;
 use JakubBoucek\Psync\Sync\FileEntry;
 use JakubBoucek\Psync\Sync\IgnoreMatcher;
+use JakubBoucek\Psync\Sync\PathRelativizer;
 use JakubBoucek\Psync\Sync\Walker;
 use JakubBoucek\Psync\Transport\HttpClient;
 use Symfony\Component\Console\Command\Command;
@@ -74,8 +75,12 @@ abstract class AbstractSyncCommand extends Command
 
     /**
      * Builds the ignore matcher and additionally never synchronizes the state
-     * cache, nor the config file itself (it holds the private key) – regardless
-     * of how it was named or located via --config.
+     * cache, the config file itself (it holds the private key) – regardless of
+     * how it was named or located via --config – nor the deployed agent file.
+     *
+     * The agent is the first line of defense for protecting itself: it must never
+     * be uploaded over, nor (with --delete) marked for removal just because it is
+     * missing locally. The agent enforces the same rule server-side as a backstop.
      */
     protected function buildIgnore(Config $config): IgnoreMatcher
     {
@@ -87,7 +92,30 @@ abstract class AbstractSyncCommand extends Command
             $patterns[] = '/' . $configRel;
         }
 
+        $agentRel = $this->agentRelativeToRoot($config);
+        if ($agentRel !== null) {
+            $patterns[] = '/' . $agentRel;
+        }
+
         return new IgnoreMatcher($patterns);
+    }
+
+    /**
+     * The deployed agent file as a path relative to the sync-root, or null when
+     * the agent lives outside the synchronized tree (scope climbs above it, so it
+     * is never walked anyway). Derived purely from the config's relative fields
+     * (agent-dir + sync-root), exactly like the baked scope, so it cannot drift.
+     */
+    private function agentRelativeToRoot(Config $config): ?string
+    {
+        if ($config->agentFile === '') {
+            return null;
+        }
+        $dirRel = PathRelativizer::relativize($config->syncRoot, $config->agentDir);
+        if ($dirRel === '..' || str_starts_with($dirRel, '../')) {
+            return null; // agent-dir is above/aside the sync-root → outside the tree
+        }
+        return $dirRel === '' ? $config->agentFile : $dirRel . '/' . $config->agentFile;
     }
 
     /**

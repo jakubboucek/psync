@@ -454,7 +454,12 @@ function handle_list(array $CONFIG, array $req): void
         return;
     }
 
-    walk_files($root, $base, function (string $rel, $stat, $isDir): void {
+    walk_files($root, $base, function (string $rel, $stat, $isDir) use ($root): void {
+        // Never expose the agent's own file (read = skip), so it never appears in
+        // the compare output and can never be marked for transfer/deletion.
+        if (is_self($root . '/' . $rel)) {
+            return;
+        }
         // A regular file omits 't' (lazy default); a directory carries t='d'.
         $obj = ['p' => base64_encode($rel), 's' => $isDir ? 0 : (int) $stat['size'], 'm' => (int) $stat['mtime']];
         if ($isDir) {
@@ -488,7 +493,8 @@ function handle_hash(array $CONFIG, array $req): void
             continue;
         }
         $abs = resolve_scope($root, $rel);
-        if ($abs === null || !is_file($abs)) {
+        if ($abs === null || !is_file($abs) || is_self($abs)) {
+            // The agent never hashes itself (read = skip); reported as missing.
             emit(['p' => $p64, 'h' => null]);
             continue;
         }
@@ -547,6 +553,11 @@ function handle_delete(array $CONFIG, array $req): void
         $abs = resolve_scope($root, $rel);
         if ($abs === null) {
             emit(['p' => $p64, 'ok' => false, 'err' => 'path outside scope']);
+            continue;
+        }
+        if (is_self($abs)) {
+            // Never let a sync delete the agent itself (write = refuse, loud).
+            emit(['p' => $p64, 'ok' => false, 'err' => 'refusing to modify the psync agent']);
             continue;
         }
         if (is_link($abs)) {
@@ -669,6 +680,11 @@ function handle_mkdir(array $CONFIG, array $req): void
             emit(['p' => $p64, 'ok' => false, 'err' => 'path outside scope']);
             continue;
         }
+        if (is_self($abs)) {
+            // Never let a sync clobber the agent itself (write = refuse, loud).
+            emit(['p' => $p64, 'ok' => false, 'err' => 'refusing to modify the psync agent']);
+            continue;
+        }
         if (is_dir($abs)) {
             emit(['p' => $p64, 'ok' => true]); // already there = goal met
             continue;
@@ -714,8 +730,8 @@ function handle_download(array $CONFIG, array $req): void
             continue;
         }
         $abs = resolve_scope($root, $rel);
-        if ($abs === null || !is_file($abs)) {
-            continue;
+        if ($abs === null || !is_file($abs) || is_self($abs)) {
+            continue; // never serve the agent's own file (read = skip)
         }
         $size = (int) filesize($abs);
         $mtime = (int) filemtime($abs);
@@ -791,6 +807,13 @@ function handle_upload(array $CONFIG, $body): void
         if ($abs === null) {
             skip_bytes($in, $h['payloadLen']);
             emit(['p' => base64_encode($rel), 'ok' => false, 'err' => 'path outside scope']);
+            continue;
+        }
+        if (is_self($abs)) {
+            // Never let a sync overwrite the agent itself (write = refuse, loud);
+            // the run continues with the rest of the batch.
+            skip_bytes($in, $h['payloadLen']);
+            emit(['p' => base64_encode($rel), 'ok' => false, 'err' => 'refusing to modify the psync agent']);
             continue;
         }
         $err = write_upload_file($abs, $in, $h);
@@ -1117,6 +1140,18 @@ function path_within(string $path, string $root): bool
     $path = rtrim($path, '/');
     $root = rtrim($root, '/');
     return $path === $root || strncmp($path . '/', $root . '/', strlen($root) + 1) === 0;
+}
+
+/**
+ * Is the resolved absolute $abs the agent's OWN file? The agent must NEVER
+ * overwrite, delete or expose itself. Comparison is on the already-resolved path
+ * (canonicalized) against __FILE__ (which PHP keeps symlink-resolved), so it is
+ * immune to however a client path was built (scope, sync-root, ignore mask) and
+ * also catches a symlink alias. This is the low-level guard behind every handler.
+ */
+function is_self(string $abs): bool
+{
+    return realpath($abs) === __FILE__;
 }
 
 function ini_bytes(string $val): int
