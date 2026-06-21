@@ -121,13 +121,17 @@ and a directory on the other is reported as a **type conflict** and skipped (nev
 ## Commands
 
 ```bash
-psync install [--host <h> | --agent-url <u>] \
-              [--sync-root <dir>] [--agent-dir <dir>] [--agent-file <name>] \
-              [-c .psync.php] [-f]                # generate agent + keys, write the config
-psync re-install [--preserve-key] [-c .psync.php] # regenerate the agent (rotates the key by default; alias: reinstall)
-psync compare  [path] [-c …] [-v] [--checksum]   # list differences (transfers nothing)
-psync upload   [path] [--delete] [--dry-run]     # local → remote
-psync download [path] [--delete] [--dry-run]     # remote → local
+psync install    [--host <h> | --agent-url <u>] \
+                 [--sync-root <dir>] [--agent-dir <dir>] [--agent-file <name>] \
+                 [--config .psync.php] [--force]              # generate agent + keys, write the config
+
+psync re-install [--preserve-key] [--config .psync.php]       # regenerate the agent file
+
+psync compare    [path] [--checksum]                          # list differences (transfers nothing)
+
+psync upload     [path] [--checksum] [--delete] [--dry-run]   # local → remote
+
+psync download   [path] [--checksum] [--delete] [--dry-run]   # remote → local
 ```
 
 - The optional **`path`** limits the operation to a subdirectory/file.
