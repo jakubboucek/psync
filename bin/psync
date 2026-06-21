@@ -38,4 +38,5 @@ $app->addCommands([
     new Command\DownloadCommand(),
 ]);
 
+/** @noinspection PhpUnhandledExceptionInspection */
 $app->run();
