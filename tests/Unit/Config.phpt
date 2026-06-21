@@ -98,3 +98,32 @@ test('a config that does not return an array throws an exception', function () {
     Assert::exception(fn() => Config::load($path), RuntimeException::class, '%a%must return an array%a%');
     @unlink($path);
 });
+
+
+test('the new behavior flags default to off (legacy behavior preserved)', function () {
+    $path = writeConfig([
+        'agentUrl' => 'https://example.com/a.php',
+        'agentFile' => 'a.php',
+    ]);
+    $config = Config::load($path);
+    Assert::false($config->checksum);
+    Assert::false($config->allowDelete);
+    Assert::false($config->testMode);
+    @unlink($path);
+});
+
+
+test('the new behavior flags are read from the config', function () {
+    $path = writeConfig([
+        'agentUrl' => 'https://example.com/a.php',
+        'agentFile' => 'a.php',
+        'checksum' => true,
+        'allowDelete' => true,
+        'testMode' => true,
+    ]);
+    $config = Config::load($path);
+    Assert::true($config->checksum);
+    Assert::true($config->allowDelete);
+    Assert::true($config->testMode);
+    @unlink($path);
+});

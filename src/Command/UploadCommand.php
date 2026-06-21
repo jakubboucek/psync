@@ -30,6 +30,7 @@ final class UploadCommand extends AbstractSyncCommand
             ->setName('upload')
             ->setDescription('Uploads the differing files to the server (local → remote).')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Only print what would be transferred/deleted.')
+            ->addOption('run', null, InputOption::VALUE_NONE, 'Force execution even when the config sets testMode (opposite of --dry-run).')
             ->addOption('delete', null, InputOption::VALUE_NONE, 'Delete files on the server that are extra compared to local.');
     }
 
@@ -59,7 +60,7 @@ final class UploadCommand extends AbstractSyncCommand
             $items[] = new TransferItem($pair['local']->path, $pair['remote']->path, $pair['local']->size);
         }
 
-        $delete = (bool) $input->getOption('delete');
+        $delete = $this->deleteEnabled($config, $input);
         $protect = $this->buildProtect($config);
         /** @var list<FileEntry> $toDelete remote entries to delete (files + dirs) */
         $toDelete = [];
@@ -84,7 +85,7 @@ final class UploadCommand extends AbstractSyncCommand
             return $comparison->conflict === [] ? Command::SUCCESS : Command::FAILURE;
         }
 
-        if ((bool) $input->getOption('dry-run')) {
+        if ($this->dryRunEnabled($config, $input)) {
             foreach ($mkdirs as $rel) {
                 $output->writeln("<fg=green>↑ $rel/</>");
             }

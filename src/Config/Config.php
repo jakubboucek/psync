@@ -47,6 +47,8 @@ final readonly class Config
         array $ignore = [],
         array $protect = [],
         public bool $checksum = false,
+        public bool $allowDelete = false,
+        public bool $testMode = false,
         public bool $compress = true,
         array $compressSkipExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'zip', 'gz', 'pdf', 'mp4', 'mp3'],
         public bool $serverGzipWorkaround = false,
@@ -108,6 +110,8 @@ final readonly class Config
             ignore: (array) ($data['ignore'] ?? []),
             protect: (array) ($data['protect'] ?? []),
             checksum: (bool) ($data['checksum'] ?? false),
+            allowDelete: (bool) ($data['allowDelete'] ?? false),
+            testMode: (bool) ($data['testMode'] ?? false),
             compress: (bool) ($data['compress'] ?? true),
             compressSkipExt: (array) ($data['compressSkipExt']
                 ?? ['jpg', 'jpeg', 'png', 'gif', 'webp', 'zip', 'gz', 'pdf', 'mp4', 'mp3']),

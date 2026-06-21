@@ -73,6 +73,8 @@ return [
     'ignore'     => ['/.git', '*.log', '/temp', '/uploads'],
     'protect'    => ['/uploads', '/temp'],       // never deleted
     'checksum'   => false,                       // like rsync -c
+    'allowDelete' => false,                      // delete extras without --delete
+    'testMode'   => false,                       // preview by default, run with --run
     'compress'   => true,                        // GZ during transfer
     'compressSkipExt' => ['jpg','png','zip','gz','pdf','mp4'],
 ];
@@ -86,7 +88,9 @@ return [
 - **`agentDir`** – where the agent file is deployed, relative to this file's directory (`''` = the sync-root). The agent's scope is derived as the path agent-dir → sync-root.
 - **`agentFile`** – the agent's filename; `re-install` rewrites this file.
 - **`ignore`** / **`protect`** – see below.
-- **`checksum`** – always hash files instead of trusting size+mtime (like `rsync -c`); slower.
+- **`checksum`** – always hash files instead of trusting size+mtime (like `rsync -c`); slower. Equivalent to passing `--checksum` on every run (the flag only adds, never removes).
+- **`allowDelete`** – delete extra entries on the target as if `--delete` were always passed. There is no opposite flag; disable it only by editing the config.
+- **`testMode`** – make every `upload`/`download` a **preview** by default (like `--dry-run`); perform the real transfer only with `--run`. Lets you keep a cautious workflow without an opposite flag in the config. A command-line flag always wins: `--dry-run` forces a preview, `--run` forces execution (passing both is an error).
 - **`compress`** / **`compressSkipExt`** – gzip the payload during transfer, except for the listed (already-compressed) extensions.
 
 > The filesystem `agentDir` (used to compute the scope) and the public `agentUrl` are **independent** — psync does not track how your DocumentRoot maps to the filesystem, so it only needs the URL that reaches the agent.
@@ -96,7 +100,7 @@ return [
 These two look similar but do **completely different** things:
 
 - **`ignore`** – the path is **entirely outside synchronization**. It is never uploaded, downloaded, compared, or deleted — psync acts as if it didn't exist on either side. Use it for build artifacts, logs, caches, and anything the server owns (e.g. user uploads). (`.psync-state.json` and the config file itself are always ignored automatically.)
-- **`protect`** – the path **stays in sync** (it can still be created and **overwritten**), it is only shielded from **deletion** by `--delete`. Without `--delete` nothing is deleted anyway, so `protect` only matters together with `--delete`.
+- **`protect`** – the path **stays in sync** (it can still be created and **overwritten**), it is only shielded from **deletion** by `--delete` / `allowDelete`. Without deletion enabled nothing is deleted anyway, so `protect` only matters once it is.
 
 > ⚠️ **`protect` does not prevent overwriting** — only deletion. If you want a directory genuinely left alone (typically user-generated content like `/uploads`), put it in **`ignore`**. The example above lists `/uploads` and `/temp` in **both**: `ignore` keeps psync from touching them, and `protect` is the extra safety net so they survive even if they are ever removed from `ignore`.
 
@@ -129,14 +133,15 @@ psync re-install [--preserve-key] [--config .psync.php]       # regenerate the a
 
 psync compare    [path] [--checksum]                          # list differences (transfers nothing)
 
-psync upload     [path] [--checksum] [--delete] [--dry-run]   # local → remote
+psync upload     [path] [--checksum] [--delete] [--dry-run] [--run]   # local → remote
 
-psync download   [path] [--checksum] [--delete] [--dry-run]   # remote → local
+psync download   [path] [--checksum] [--delete] [--dry-run] [--run]   # remote → local
 ```
 
 - The optional **`path`** limits the operation to a subdirectory/file.
-- **`--delete`** deletes extra files on the other side, **except for `protect`**. Without it, nothing is deleted.
+- **`--delete`** deletes extra files on the other side, **except for `protect`**. Without it (and without `allowDelete` in the config), nothing is deleted.
 - **`--dry-run`** only prints what would be transferred/deleted.
+- **`--run`** forces a real transfer when the config sets `testMode` (the opposite of `--dry-run`; passing both is an error).
 - **`--checksum`** always computes the hash (ignoring mtime and the cache), like `rsync -c`.
 
 `compare` legend: `>` local only · `<` server only · `M` differs · `=` identical.

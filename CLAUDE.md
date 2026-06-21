@@ -34,6 +34,13 @@ documentation is in [README.md](README.md); here are the things important for ed
   rejected with a migration hint pointing at `install --force`): `agentUrl` (verbatim, used by `HttpClient`),
   `syncRoot` + `agentDir` + `agentFile` (relative to the config dir), `privateKey`, and the behavior flags.
   `localRoot` is `syncRoot` resolved against the config dir (what the client walks).
+- **Behavior flags that mirror CLI options** (all default `false`, so absence = legacy behavior; a CLI flag
+  always overrides the config): `checksum` (= always `--checksum`; the flag only adds), `allowDelete`
+  (= always `--delete`; **no opposite flag**, disable only by editing the config), `testMode`
+  (= default `--dry-run`: `upload`/`download` only preview unless `--run` is given; `--run` and `--dry-run`
+  together is a usage error). Resolved in `AbstractSyncCommand::deleteEnabled()` / `dryRunEnabled()`;
+  `checksum` is OR-ed in `buildComparator()`. The `install` config template is intentionally left
+  unchanged (new keys not emitted) so default installs keep the old behavior.
 - **`install` vs `re-install`** (`InstallCommand`, `ReinstallCommand`; the command is `re-install`, alias
   `reinstall`): `install` is the bootstrap — new key pair, new randomized filename, and it
   **writes/overwrites** `.psync.php`. Run over an existing config it asks "did you mean `re-install`?"

@@ -28,6 +28,7 @@ final class DownloadCommand extends AbstractSyncCommand
             ->setName('download')
             ->setDescription('Downloads the differing files from the server (remote → local).')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Only print what would be transferred/deleted.')
+            ->addOption('run', null, InputOption::VALUE_NONE, 'Force execution even when the config sets testMode (opposite of --dry-run).')
             ->addOption('delete', null, InputOption::VALUE_NONE, 'Delete local files that are extra compared to the server.');
     }
 
@@ -57,7 +58,7 @@ final class DownloadCommand extends AbstractSyncCommand
             $items[] = new TransferItem($pair['remote']->path, $pair['local']->path, $pair['remote']->size);
         }
 
-        $delete = (bool) $input->getOption('delete');
+        $delete = $this->deleteEnabled($config, $input);
         $protect = $this->buildProtect($config);
         /** @var list<FileEntry> $toDelete local entries to delete (files + dirs) */
         $toDelete = [];
@@ -82,7 +83,7 @@ final class DownloadCommand extends AbstractSyncCommand
             return $comparison->conflict === [] ? Command::SUCCESS : Command::FAILURE;
         }
 
-        if ((bool) $input->getOption('dry-run')) {
+        if ($this->dryRunEnabled($config, $input)) {
             foreach ($mkdirs as $rel) {
                 $output->writeln("<fg=green>↓ $rel/</>");
             }

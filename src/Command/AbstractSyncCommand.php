@@ -19,6 +19,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use RuntimeException;
 
 /**
  * Shared base for commands that work with the config and a relative path (scope).
@@ -175,6 +176,32 @@ abstract class AbstractSyncCommand extends Command
             static fn(FileEntry $a, FileEntry $b): int => substr_count($b->path, '/') <=> substr_count($a->path, '/'),
         );
         return $entries;
+    }
+
+    /**
+     * Whether deletions of extra entries on the target are allowed. The CLI flag
+     * `--delete` always wins; otherwise the config's `allowDelete` decides. There
+     * is no opposite flag – disabling is done only by editing the config.
+     */
+    protected function deleteEnabled(Config $config, InputInterface $input): bool
+    {
+        return (bool) $input->getOption('delete') || $config->allowDelete;
+    }
+
+    /**
+     * Whether the run is a preview only (transfers/deletes nothing). A command-line
+     * flag always overrides the config: `--dry-run` forces a preview, `--run` forces
+     * execution. Without either, the config's `testMode` decides (default: execute,
+     * so the legacy behavior is unchanged). Passing both flags is a usage error.
+     */
+    protected function dryRunEnabled(Config $config, InputInterface $input): bool
+    {
+        $dryFlag = (bool) $input->getOption('dry-run');
+        $run = (bool) $input->getOption('run');
+        if ($dryFlag && $run) {
+            throw new RuntimeException('The --dry-run and --run options are mutually exclusive.');
+        }
+        return $dryFlag || ($config->testMode && !$run);
     }
 
     protected function buildComparator(Config $config, InputInterface $input, HttpClient $http, ?Reporter $reporter = null): Comparator
