@@ -17,9 +17,9 @@ use RuntimeException;
 final readonly class Downloader
 {
     /** Batch cap by total size (so the request stays within the server's limit). */
-    private const BATCH_BYTES = 64 * 1024 * 1024;
+    private const int BATCH_BYTES = 64 * 1024 * 1024;
     private const int BATCH_FILES = 1000;
-    private const CHUNK = 1 << 16;
+    private const int CHUNK = 1 << 16;
 
     /**
      * @param list<string> $skipExt

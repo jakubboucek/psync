@@ -21,7 +21,7 @@ use JakubBoucek\Psync\Transport\HttpClient;
 final readonly class Comparator
 {
     /** Batch cap for server hashing: total size (100 MB) and file count. */
-    private const HASH_BATCH_BYTES = 100 * 1024 * 1024;
+    private const int HASH_BATCH_BYTES = 100 * 1024 * 1024;
     private const int HASH_BATCH_FILES = 1000;
 
     public function __construct(

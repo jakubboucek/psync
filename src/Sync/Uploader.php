@@ -16,10 +16,10 @@ use JakubBoucek\Psync\Transport\HttpClient;
 final readonly class Uploader
 {
     /** Reserve below post_max_size for headers etc. */
-    private const MARGIN = 16 * 1024;
+    private const int MARGIN = 16 * 1024;
 
     /** Fallback when the server reports an unlimited post_max_size (0). */
-    private const DEFAULT_LIMIT = 64 * 1024 * 1024;
+    private const int DEFAULT_LIMIT = 64 * 1024 * 1024;
 
     private int $limit;
 
@@ -91,7 +91,7 @@ final readonly class Uploader
         // The batch body is ≤ post_max_size (small), assemble it into a string.
         $body = '';
         foreach ($batch as $item) {
-            $body .= (string) file_get_contents($item['tmp']);
+            $body .= file_get_contents($item['tmp']);
             @unlink($item['tmp']);
         }
 
