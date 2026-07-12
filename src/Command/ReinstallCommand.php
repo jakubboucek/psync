@@ -8,6 +8,7 @@ use JakubBoucek\Psync\Config\Config;
 use JakubBoucek\Psync\Install\AgentBuilder;
 use JakubBoucek\Psync\Protocol\Signer;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -106,7 +107,7 @@ final class ReinstallCommand extends Command
         $io->success("Agent regenerated: $agentPath");
         $io->writeln(sprintf(
             'Re-upload it via FTP into <comment>%s</comment>, overwriting the old agent file.',
-            $config->agentDir === '' ? 'the sync-root' : $config->agentDir,
+            $config->agentDir === '' ? 'the sync-root' : OutputFormatter::escape($config->agentDir),
         ));
 
         if ($rotateKey) {

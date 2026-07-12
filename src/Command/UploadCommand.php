@@ -11,6 +11,7 @@ use JakubBoucek\Psync\Sync\FileEntry;
 use JakubBoucek\Psync\Sync\TransferItem;
 use JakubBoucek\Psync\Sync\Uploader;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -87,13 +88,13 @@ final class UploadCommand extends AbstractSyncCommand
 
         if ($this->dryRunEnabled($config, $input)) {
             foreach ($mkdirs as $rel) {
-                $output->writeln("<fg=green>↑ $rel/</>");
+                $output->writeln('<fg=green>↑ ' . OutputFormatter::escape($rel) . '/</>');
             }
             foreach ($items as $item) {
-                $output->writeln("<fg=green>↑ {$item->targetPath}</>");
+                $output->writeln('<fg=green>↑ ' . OutputFormatter::escape($item->targetPath) . '</>');
             }
             foreach ($toDelete as $e) {
-                $output->writeln('<fg=red>␡ ' . $e->path . ($e->isDir() ? '/' : '') . '</>');
+                $output->writeln('<fg=red>␡ ' . OutputFormatter::escape($e->path . ($e->isDir() ? '/' : '')) . '</>');
             }
             $io->note(sprintf(
                 'dry run: %d dirs to create, %d to upload, %d to delete.',
@@ -119,10 +120,11 @@ final class UploadCommand extends AbstractSyncCommand
                 $rel = Wire::decPath((string) $r['p']);
                 if (($r['ok'] ?? false) === true) {
                     $created++;
-                    $output->writeln("<fg=green>↑ $rel/</>");
+                    $output->writeln('<fg=green>↑ ' . OutputFormatter::escape($rel) . '/</>');
                 } else {
                     $fail++;
-                    $output->writeln("<fg=red>✗ mkdir $rel/</> <fg=gray>(" . (string) ($r['err'] ?? '?') . ")</>");
+                    $output->writeln('<fg=red>✗ mkdir ' . OutputFormatter::escape($rel) . '/</> <fg=gray>('
+                        . OutputFormatter::escape((string) ($r['err'] ?? '?')) . ')</>');
                 }
             }
         }
@@ -131,10 +133,11 @@ final class UploadCommand extends AbstractSyncCommand
         $uploader->upload($items, static function (string $rel, bool $success, ?string $err) use ($output, &$ok, &$fail): void {
             if ($success) {
                 $ok++;
-                $output->writeln("<fg=green>↑ $rel</>");
+                $output->writeln('<fg=green>↑ ' . OutputFormatter::escape($rel) . '</>');
             } else {
                 $fail++;
-                $output->writeln("<fg=red>✗ $rel</> <fg=gray>($err)</>");
+                $output->writeln('<fg=red>✗ ' . OutputFormatter::escape($rel) . '</> <fg=gray>('
+                    . OutputFormatter::escape((string) $err) . ')</>');
             }
         });
 
@@ -158,10 +161,11 @@ final class UploadCommand extends AbstractSyncCommand
                 $rel = Wire::decPath($enc) . (($isDir[$enc] ?? false) ? '/' : '');
                 if (($r['ok'] ?? false) === true) {
                     $deleted++;
-                    $output->writeln("<fg=red>␡ $rel</>");
+                    $output->writeln('<fg=red>␡ ' . OutputFormatter::escape($rel) . '</>');
                 } else {
                     $fail++;
-                    $output->writeln("<fg=red>✗ delete $rel</> <fg=gray>(" . (string) ($r['err'] ?? '?') . ")</>");
+                    $output->writeln('<fg=red>✗ delete ' . OutputFormatter::escape($rel) . '</> <fg=gray>('
+                        . OutputFormatter::escape((string) ($r['err'] ?? '?')) . ')</>');
                 }
             }
         }

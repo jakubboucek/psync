@@ -8,6 +8,7 @@ use JakubBoucek\Psync\Install\AgentBuilder;
 use JakubBoucek\Psync\Protocol\Signer;
 use JakubBoucek\Psync\Sync\PathRelativizer;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -156,8 +157,8 @@ final class InstallCommand extends Command
         $io->success("Agent generated: $agentPath");
         $io->writeln(sprintf(
             'Upload it via FTP into <comment>%s</comment> so it is reachable at <comment>%s</comment>.',
-            $agentDir === '' ? 'the sync-root' : $agentDir,
-            $url,
+            $agentDir === '' ? 'the sync-root' : OutputFormatter::escape($agentDir),
+            OutputFormatter::escape($url),
         ));
 
         // --- write the config ------------------------------------------------------------

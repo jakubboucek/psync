@@ -137,6 +137,14 @@ documentation is in [README.md](README.md); here are the things important for ed
 
 ## Watch out (why it is the way it is)
 
+- **Console output escaping**: any dynamic data interpolated into Symfony console markup (`<fg=…>…</>`)
+  MUST go through `OutputFormatter::escape()` — remote file names and agent-returned error strings are
+  server-controlled bytes, and an unescaped tag in them gets interpreted by the formatter (text swallowed
+  or restyled; worst case a name visually masked in a `--delete` preview). The rule is positional (Symfony
+  has no Nette-style `HtmlStringable` trusted-markup type): escape each untrusted fragment at the point
+  where the markup string is composed. `Reporter` escapes centrally (its messages are plain text by
+  contract — see `tests/Unit/Reporter.phpt`); `SymfonyStyle` block helpers (`success`/`warning`/`error`/
+  `note`) escape by themselves (`block(..., $escape = true)`), but plain `writeln()` does NOT.
 - **Capabilities reads the original values BEFORE `prepare_runtime()`**: `set_time_limit(0)` zeroes out
   `max_execution_time` and the agent disables `zlib.output_compression` — that is why both are captured into
   `$CONFIG['_maxExecutionTime']` / `['_zlibOutputCompression']` at the start. Do not move it after

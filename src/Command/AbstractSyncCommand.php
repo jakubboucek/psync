@@ -15,6 +15,7 @@ use JakubBoucek\Psync\Sync\PathRelativizer;
 use JakubBoucek\Psync\Sync\Walker;
 use JakubBoucek\Psync\Transport\HttpClient;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -164,7 +165,7 @@ abstract class AbstractSyncCommand extends Command
         foreach ($conflict as $rel => $pair) {
             $output->writeln(sprintf(
                 '<fg=magenta>! type conflict: %s</> <fg=gray>(local %s / remote %s – skipped, resolve manually)</>',
-                $rel,
+                OutputFormatter::escape($rel),
                 $pair['local']->isDir() ? 'dir' : 'file',
                 $pair['remote']->isDir() ? 'dir' : 'file',
             ));
