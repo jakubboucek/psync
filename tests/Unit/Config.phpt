@@ -109,6 +109,7 @@ test('the new behavior flags default to off (legacy behavior preserved)', functi
     Assert::false($config->checksum);
     Assert::false($config->allowDelete);
     Assert::false($config->testMode);
+    Assert::false($config->http1);
     @unlink($path);
 });
 
@@ -120,10 +121,12 @@ test('the new behavior flags are read from the config', function () {
         'checksum' => true,
         'allowDelete' => true,
         'testMode' => true,
+        'http1' => true,
     ]);
     $config = Config::load($path);
     Assert::true($config->checksum);
     Assert::true($config->allowDelete);
     Assert::true($config->testMode);
+    Assert::true($config->http1);
     @unlink($path);
 });

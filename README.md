@@ -92,6 +92,7 @@ return [
 - **`allowDelete`** – delete extra entries on the target as if `--delete` were always passed. There is no opposite flag; disable it only by editing the config.
 - **`testMode`** – make every `upload`/`download` a **preview** by default (like `--dry-run`); perform the real transfer only with `--run`. Lets you keep a cautious workflow without an opposite flag in the config. A command-line flag always wins: `--dry-run` forces a preview, `--run` forces execution (passing both is an error).
 - **`compress`** / **`compressSkipExt`** – gzip the payload during transfer, except for the listed (already-compressed) extensions.
+- **`http1`** – force HTTP/1.1 for every agent request, as if `--http1` were always passed (the flag only adds). Use it when the hosting's HTTP/2 layer kills long streamed responses (`HTTP/2 stream … INTERNAL_ERROR`).
 
 > The filesystem `agentDir` (used to compute the scope) and the public `agentUrl` are **independent** — psync does not track how your DocumentRoot maps to the filesystem, so it only needs the URL that reaches the agent.
 
@@ -131,11 +132,11 @@ psync install    [--host <h> | --agent-url <u>] \
 
 psync re-install [--preserve-key] [--config .psync.php]       # regenerate the agent file
 
-psync compare    [path] [--checksum]                          # list differences (transfers nothing)
+psync compare    [path] [--checksum] [--http1]                # list differences (transfers nothing)
 
-psync upload     [path] [--checksum] [--delete] [--dry-run] [--run]   # local → remote
+psync upload     [path] [--checksum] [--http1] [--delete] [--dry-run] [--run]   # local → remote
 
-psync download   [path] [--checksum] [--delete] [--dry-run] [--run]   # remote → local
+psync download   [path] [--checksum] [--http1] [--delete] [--dry-run] [--run]   # remote → local
 ```
 
 - The optional **`path`** limits the operation to a subdirectory/file.
@@ -143,6 +144,7 @@ psync download   [path] [--checksum] [--delete] [--dry-run] [--run]   # remote �
 - **`--dry-run`** only prints what would be transferred/deleted.
 - **`--run`** forces a real transfer when the config sets `testMode` (the opposite of `--dry-run`; passing both is an error).
 - **`--checksum`** always computes the hash (ignoring mtime and the cache), like `rsync -c`.
+- **`--http1`** forces HTTP/1.1 for agent requests — a workaround for hostings whose HTTP/2 front server kills long streamed responses (the client then fails with `HTTP/2 stream … INTERNAL_ERROR`). Set `http1` in the config to make it permanent.
 
 `compare` legend: `>` local only · `<` server only · `M` differs · `=` identical.
 

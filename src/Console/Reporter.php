@@ -29,6 +29,12 @@ final class Reporter
         $this->live = $this->err->isDecorated() && !$output->isVerbose();
     }
 
+    /** Always shown (any verbosity): a problem the user should know about, run continues. */
+    public function warn(string $message): void
+    {
+        $this->err->writeln("<fg=yellow>⚠ $message</>");
+    }
+
     /** -v: high-level steps (phases, counts). */
     public function log(string $message): void
     {

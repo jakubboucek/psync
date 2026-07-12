@@ -50,6 +50,12 @@ abstract class AbstractSyncCommand extends Command
                 null,
                 InputOption::VALUE_NONE,
                 'Always compute the hash (ignore mtime and cache), like rsync -c.',
+            )
+            ->addOption(
+                'http1',
+                null,
+                InputOption::VALUE_NONE,
+                'Force HTTP/1.1 for agent requests (workaround for hostings whose HTTP/2 kills streamed responses).',
             );
     }
 
@@ -64,13 +70,17 @@ abstract class AbstractSyncCommand extends Command
         return trim((string) $input->getArgument('path'), '/');
     }
 
-    protected function buildHttpClient(Config $config, ?Reporter $reporter = null): HttpClient
+    protected function buildHttpClient(Config $config, InputInterface $input, ?Reporter $reporter = null): HttpClient
     {
+        // Like `checksum`: the CLI flag only adds, the config's `http1` makes it permanent.
+        $forceHttp1 = $config->http1 || (bool) $input->getOption('http1');
+
         return new HttpClient(
             $config->url,
             new Signer($config->requirePrivateKey()),
             $config->scopeRelPath(),
             $reporter,
+            $forceHttp1,
         );
     }
 

@@ -37,7 +37,7 @@ final class DownloadCommand extends AbstractSyncCommand
         $io = new SymfonyStyle($input, $output);
         $config = $this->loadConfig($input);
         $reporter = new Reporter($output);
-        $http = $this->buildHttpClient($config, $reporter);
+        $http = $this->buildHttpClient($config, $input, $reporter);
         $http->capabilities();
 
         $comparison = $this->buildComparator($config, $input, $http, $reporter)->compare($this->scope($input));
