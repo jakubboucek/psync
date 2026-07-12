@@ -27,6 +27,7 @@ final class HttpClient
         private readonly Signer $signer,
         private readonly ?string $expectedScopeRelPath = null,
         private readonly ?Reporter $reporter = null,
+        private readonly bool $forceHttp1 = false,
     ) {
     }
 
@@ -56,7 +57,11 @@ final class HttpClient
         }
 
         $this->checkScope($caps);
+        $this->checkPhpVersion($caps);
 
+        if ($this->forceHttp1) {
+            $this->reporter?->log('Forcing HTTP/1.1 for all agent requests.');
+        }
         $this->reporter?->log(sprintf(
             'Server: PHP %s, post_max_size %d B, max_execution_time %s s, clock offset %+d s',
             (string) ($caps['phpVersion'] ?? '?'),
@@ -96,6 +101,30 @@ final class HttpClient
                 "Agent scope does not resolve on the server: the baked path '%s' points outside the agent's "
                 . 'reachable tree. Check agent-dir/sync-root and run `psync re-install`.',
                 $reported,
+            ));
+        }
+    }
+
+    /**
+     * Warns (does not fail) when the server's PHP is older than what the agent
+     * is written for. The agent may still happen to work there — auth and
+     * capabilities already succeeded at this point — so the run continues as a
+     * best-effort try; the warning explains any weirdness that follows.
+     *
+     * @param array<string, mixed> $caps
+     */
+    private function checkPhpVersion(array $caps): void
+    {
+        $php = $caps['phpVersion'] ?? null;
+        if (!is_string($php) || $php === '') {
+            return;
+        }
+        if (version_compare($php, Protocol::AGENT_MIN_PHP, '<')) {
+            $this->reporter?->warn(sprintf(
+                'Server runs PHP %s, but the psync agent supports PHP %s+ — continuing as a best-effort try, '
+                . 'behavior on this version is untested.',
+                $php,
+                Protocol::AGENT_MIN_PHP,
             ));
         }
     }
@@ -186,6 +215,7 @@ final class HttpClient
             CURLOPT_POSTFIELDS => $body,
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_FILE => $fh,
+            CURLOPT_HTTP_VERSION => $this->httpVersion(),
         ]);
         $ok = curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -263,6 +293,7 @@ final class HttpClient
             CURLOPT_POSTFIELDS => $body,
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_RETURNTRANSFER => false,
+            CURLOPT_HTTP_VERSION => $this->httpVersion(),
             CURLOPT_WRITEFUNCTION => static function ($ch, string $data) use (&$buffer, $deliver): int {
                 $buffer .= $data;
                 while (($pos = strpos($buffer, "\n")) !== false) {
@@ -290,6 +321,16 @@ final class HttpClient
         if ($code >= 400) {
             throw new RuntimeException("Agent responded with HTTP $code.");
         }
+    }
+
+    /**
+     * The HTTP version for curl: negotiated (default) or forced HTTP/1.1 — a
+     * workaround for hostings whose HTTP/2 layer kills long flushed streaming
+     * responses (`HTTP/2 stream … INTERNAL_ERROR`).
+     */
+    private function httpVersion(): int
+    {
+        return $this->forceHttp1 ? CURL_HTTP_VERSION_1_1 : CURL_HTTP_VERSION_NONE;
     }
 
     /**

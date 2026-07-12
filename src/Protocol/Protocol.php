@@ -34,6 +34,13 @@ final class Protocol
     public const string ACTION_DELETE = 'delete';
     public const string ACTION_MKDIR = 'mkdir';
 
+    /**
+     * Minimum PHP version the agent is written and tested for. An older server
+     * still gets a best-effort try (the client only warns), because the agent
+     * may happen to run fine there — but anything below this is unsupported.
+     */
+    public const string AGENT_MIN_PHP = '7.4';
+
     /** Maximum allowed client↔server time difference (s) due to the replay window. */
     public const int TIME_WINDOW = 300;
 

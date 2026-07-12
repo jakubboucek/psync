@@ -44,9 +44,17 @@ documentation is in [README.md](README.md); here are the things important for ed
   always overrides the config): `checksum` (= always `--checksum`; the flag only adds), `allowDelete`
   (= always `--delete`; **no opposite flag**, disable only by editing the config), `testMode`
   (= default `--dry-run`: `upload`/`download` only preview unless `--run` is given; `--run` and `--dry-run`
-  together is a usage error). Resolved in `AbstractSyncCommand::deleteEnabled()` / `dryRunEnabled()`;
-  `checksum` is OR-ed in `buildComparator()`. The `install` config template is intentionally left
-  unchanged (new keys not emitted) so default installs keep the old behavior.
+  together is a usage error), and `http1` (= always `--http1`: force HTTP/1.1 for agent requests via
+  `CURLOPT_HTTP_VERSION`; the flag only adds — a workaround for hostings whose HTTP/2 front server
+  resets long flushed streaming responses, surfacing on the client as curl's `HTTP/2 stream … was not
+  closed cleanly: INTERNAL_ERROR`). Resolved in `AbstractSyncCommand::deleteEnabled()` /
+  `dryRunEnabled()` / `buildHttpClient()`; `checksum` is OR-ed in `buildComparator()`. The `install`
+  config template is intentionally left unchanged (new keys not emitted) so default installs keep the
+  old behavior.
+- **Server PHP below `Protocol::AGENT_MIN_PHP` (7.4) is a warning, not an error**: the client warns
+  (`Reporter::warn`, the only always-visible level; log/debug/trace are gated by -v) from
+  `HttpClient::capabilities()` and continues best-effort — the agent passes the full smoke test on
+  PHP 7.3.33, so a hard fail would needlessly block working hostings.
 - **`install` vs `re-install`** (`InstallCommand`, `ReinstallCommand`; the command is `re-install`, alias
   `reinstall`): `install` is the bootstrap — new key pair, new randomized filename, and it
   **writes/overwrites** `.psync.php`. Run over an existing config it asks "did you mean `re-install`?"
