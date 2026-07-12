@@ -9,6 +9,7 @@ use JakubBoucek\Psync\Sync\Downloader;
 use JakubBoucek\Psync\Sync\FileEntry;
 use JakubBoucek\Psync\Sync\TransferItem;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -85,13 +86,13 @@ final class DownloadCommand extends AbstractSyncCommand
 
         if ($this->dryRunEnabled($config, $input)) {
             foreach ($mkdirs as $rel) {
-                $output->writeln("<fg=green>↓ $rel/</>");
+                $output->writeln('<fg=green>↓ ' . OutputFormatter::escape($rel) . '/</>');
             }
             foreach ($items as $item) {
-                $output->writeln("<fg=green>↓ {$item->targetPath}</>");
+                $output->writeln('<fg=green>↓ ' . OutputFormatter::escape($item->targetPath) . '</>');
             }
             foreach ($toDelete as $e) {
-                $output->writeln('<fg=red>␡ ' . $e->path . ($e->isDir() ? '/' : '') . '</>');
+                $output->writeln('<fg=red>␡ ' . OutputFormatter::escape($e->path . ($e->isDir() ? '/' : '')) . '</>');
             }
             $io->note(sprintf(
                 'dry run: %d dirs to create, %d to download, %d to delete locally.',
@@ -112,10 +113,10 @@ final class DownloadCommand extends AbstractSyncCommand
             $abs = $config->localRoot . '/' . $rel;
             if (is_dir($abs) || @mkdir($abs, 0775, true) || is_dir($abs)) {
                 $created++;
-                $output->writeln("<fg=green>↓ $rel/</>");
+                $output->writeln('<fg=green>↓ ' . OutputFormatter::escape($rel) . '/</>');
             } else {
                 $fail++;
-                $output->writeln("<fg=red>✗ mkdir $rel/</>");
+                $output->writeln('<fg=red>✗ mkdir ' . OutputFormatter::escape($rel) . '/</>');
             }
         }
 
@@ -123,10 +124,11 @@ final class DownloadCommand extends AbstractSyncCommand
         $downloader->download($items, static function (string $rel, bool $success, ?string $err) use ($output, &$ok, &$fail): void {
             if ($success) {
                 $ok++;
-                $output->writeln("<fg=green>↓ $rel</>");
+                $output->writeln('<fg=green>↓ ' . OutputFormatter::escape($rel) . '</>');
             } else {
                 $fail++;
-                $output->writeln("<fg=red>✗ $rel</> <fg=gray>($err)</>");
+                $output->writeln('<fg=red>✗ ' . OutputFormatter::escape($rel) . '</> <fg=gray>('
+                    . OutputFormatter::escape((string) $err) . ')</>');
             }
         });
 
@@ -138,17 +140,18 @@ final class DownloadCommand extends AbstractSyncCommand
             if ($e->isDir()) {
                 if (!is_dir($abs) || @rmdir($abs)) {
                     $deleted++;
-                    $output->writeln("<fg=red>␡ {$e->path}/</>");
+                    $output->writeln('<fg=red>␡ ' . OutputFormatter::escape($e->path) . '/</>');
                 } else {
                     $fail++;
-                    $output->writeln("<fg=red>✗ rmdir {$e->path}/</> <fg=gray>(directory not empty)</>");
+                    $output->writeln('<fg=red>✗ rmdir ' . OutputFormatter::escape($e->path)
+                        . '/</> <fg=gray>(directory not empty)</>');
                 }
             } elseif (!is_file($abs) || @unlink($abs)) {
                 $deleted++;
-                $output->writeln("<fg=red>␡ {$e->path}</>");
+                $output->writeln('<fg=red>␡ ' . OutputFormatter::escape($e->path) . '</>');
             } else {
                 $fail++;
-                $output->writeln("<fg=red>✗ delete {$e->path}</>");
+                $output->writeln('<fg=red>✗ delete ' . OutputFormatter::escape($e->path) . '</>');
             }
         }
 

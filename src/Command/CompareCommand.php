@@ -8,6 +8,7 @@ use JakubBoucek\Psync\Console\Reporter;
 use JakubBoucek\Psync\Sync\Comparison;
 use JakubBoucek\Psync\Sync\FileEntry;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
@@ -55,31 +56,31 @@ final class CompareCommand extends AbstractSyncCommand
         $lines = [];
         if ($output->isVerbose()) {
             foreach ($c->equal as $rel) {
-                $lines[$rel] = "<fg=gray>=  $rel</>";
+                $lines[$rel] = '<fg=gray>=  ' . OutputFormatter::escape($rel) . '</>';
             }
         }
         foreach ($c->modified as $rel => $pair) {
             $lines[$rel] = sprintf(
                 "<fg=yellow>M  %s</> <fg=gray>(local %s / remote %s)</>",
-                $rel,
+                OutputFormatter::escape($rel),
                 $this->bytes($pair['local']->size),
                 $this->bytes($pair['remote']->size),
             );
         }
         foreach ($c->localOnly as $rel => $e) {
             $lines[$rel] = $e->isDir()
-                ? "<fg=green>>  {$this->display($e)}</>"
-                : "<fg=green>>  {$this->display($e)}</> <fg=gray>({$this->bytes($e->size)})</>";
+                ? '<fg=green>>  ' . OutputFormatter::escape($this->display($e)) . '</>'
+                : '<fg=green>>  ' . OutputFormatter::escape($this->display($e)) . "</> <fg=gray>({$this->bytes($e->size)})</>";
         }
         foreach ($c->remoteOnly as $rel => $e) {
             $lines[$rel] = $e->isDir()
-                ? "<fg=red><  {$this->display($e)}</>"
-                : "<fg=red><  {$this->display($e)}</> <fg=gray>({$this->bytes($e->size)})</>";
+                ? '<fg=red><  ' . OutputFormatter::escape($this->display($e)) . '</>'
+                : '<fg=red><  ' . OutputFormatter::escape($this->display($e)) . "</> <fg=gray>({$this->bytes($e->size)})</>";
         }
         foreach ($c->conflict as $rel => $pair) {
             $lines[$rel] = sprintf(
                 '<fg=magenta>!  %s</> <fg=gray>(type conflict: local %s / remote %s)</>',
-                $rel,
+                OutputFormatter::escape($rel),
                 $pair['local']->isDir() ? 'dir' : 'file',
                 $pair['remote']->isDir() ? 'dir' : 'file',
             );

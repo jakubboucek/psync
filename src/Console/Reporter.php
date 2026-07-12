@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace JakubBoucek\Psync\Console;
 
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -14,6 +15,11 @@ use Symfony\Component\Console\Output\OutputInterface;
  * (important under `composer global exec` and when piping). A single line is
  * rewritten in place via carriage return; it is only shown on a decorated TTY
  * and not in verbose mode (there the log lines act as progress instead).
+ *
+ * Every message is treated as PLAIN TEXT: it is escaped before being wrapped
+ * in this class's own console markup, so markup-like tokens in the data
+ * (remote file names, server-reported values) are printed literally instead
+ * of being interpreted by the output formatter.
  */
 final class Reporter
 {
@@ -32,14 +38,14 @@ final class Reporter
     /** Always shown (any verbosity): a problem the user should know about, run continues. */
     public function warn(string $message): void
     {
-        $this->err->writeln("<fg=yellow>⚠ $message</>");
+        $this->err->writeln('<fg=yellow>⚠ ' . OutputFormatter::escape($message) . '</>');
     }
 
     /** -v: high-level steps (phases, counts). */
     public function log(string $message): void
     {
         if ($this->output->isVerbose()) {
-            $this->err->writeln("<fg=gray>· $message</>");
+            $this->err->writeln('<fg=gray>· ' . OutputFormatter::escape($message) . '</>');
         }
     }
 
@@ -47,7 +53,7 @@ final class Reporter
     public function debug(string $message): void
     {
         if ($this->output->isVeryVerbose()) {
-            $this->err->writeln("<fg=gray>·· $message</>");
+            $this->err->writeln('<fg=gray>·· ' . OutputFormatter::escape($message) . '</>');
         }
     }
 
@@ -55,7 +61,7 @@ final class Reporter
     public function trace(string $message): void
     {
         if ($this->output->isDebug()) {
-            $this->err->writeln("<fg=gray>··· $message</>");
+            $this->err->writeln('<fg=gray>··· ' . OutputFormatter::escape($message) . '</>');
         }
     }
 
