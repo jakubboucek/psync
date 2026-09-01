@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace JakubBoucek\Psync\Transport;
 
+use CurlHandle;
 use JakubBoucek\Psync\Console\Reporter;
 use JakubBoucek\Psync\Protocol\Protocol;
 use JakubBoucek\Psync\Protocol\Signer;
@@ -20,14 +21,19 @@ final class HttpClient
     private const string VERSION_MISMATCH = 'Protocol version mismatch: the agent rejected the request. '
         . 'Regenerate the agent with `psync re-install` and re-upload it.';
 
+    /** How much of an HTTP-error body is kept for the exception message. */
+    private const int ERROR_BODY_LIMIT = 4096;
+
     private int $timeOffset = 0;
 
+    /** @param non-empty-string $userAgent */
     public function __construct(
         private readonly string $url,
         private readonly Signer $signer,
         private readonly ?string $expectedScopeRelPath = null,
         private readonly ?Reporter $reporter = null,
         private readonly bool $forceHttp1 = false,
+        private readonly string $userAgent = 'psync',
     ) {
     }
 
@@ -184,7 +190,7 @@ final class HttpClient
     /**
      * Downloads a binary response (download) into a temporary file and returns
      * its path. The caller is responsible for deleting it. On an HTTP error it
-     * reads the body as NDJSON and throws an exception.
+     * throws an exception built from the body head (see httpErrorMessage()).
      *
      * @param array<string, mixed> $payload
      */
@@ -216,9 +222,11 @@ final class HttpClient
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_FILE => $fh,
             CURLOPT_HTTP_VERSION => $this->httpVersion(),
+            CURLOPT_USERAGENT => $this->userAgent,
         ]);
         $ok = curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $contentType = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
         $curlErr = curl_error($ch);
         curl_close($ch);
         fclose($fh);
@@ -232,15 +240,9 @@ final class HttpClient
             throw new RuntimeException(self::VERSION_MISMATCH);
         }
         if ($code >= 400) {
-            $head = (string) file_get_contents($tmp, false, null, 0, 4096);
+            $head = (string) file_get_contents($tmp, false, null, 0, self::ERROR_BODY_LIMIT);
             @unlink($tmp);
-            $msg = $head;
-            $firstLine = strtok($head, "\n");
-            $obj = $firstLine === false ? null : json_decode(trim($firstLine), true);
-            if (is_array($obj) && isset($obj['error'])) {
-                $msg = (string) $obj['error'];
-            }
-            throw new RuntimeException("Agent responded with HTTP $code: $msg");
+            throw new RuntimeException($this->httpErrorMessage($code, $head, $contentType));
         }
         return $tmp;
     }
@@ -294,7 +296,17 @@ final class HttpClient
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_RETURNTRANSFER => false,
             CURLOPT_HTTP_VERSION => $this->httpVersion(),
-            CURLOPT_WRITEFUNCTION => static function ($ch, string $data) use (&$buffer, $deliver): int {
+            CURLOPT_USERAGENT => $this->userAgent,
+            CURLOPT_WRITEFUNCTION => static function (CurlHandle $ch, string $data) use (&$buffer, $deliver): int {
+                // On an error status the body may not come from the agent at all (a hosting
+                // error page, a bot-protection challenge) – keep its head for the exception
+                // message instead of parsing it as NDJSON.
+                if ((int) curl_getinfo($ch, CURLINFO_HTTP_CODE) >= 400) {
+                    if (strlen($buffer) < self::ERROR_BODY_LIMIT) {
+                        $buffer .= $data;
+                    }
+                    return strlen($data);
+                }
                 $buffer .= $data;
                 while (($pos = strpos($buffer, "\n")) !== false) {
                     $deliver(substr($buffer, 0, $pos));
@@ -306,12 +318,10 @@ final class HttpClient
 
         $ok = curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $contentType = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
         $curlErr = curl_error($ch);
         curl_close($ch);
 
-        if ($buffer !== '') {
-            $deliver($buffer); // last line without a trailing \n
-        }
         if ($ok === false) {
             throw new RuntimeException("Connection failed: $curlErr");
         }
@@ -319,8 +329,31 @@ final class HttpClient
             throw new RuntimeException(self::VERSION_MISMATCH);
         }
         if ($code >= 400) {
-            throw new RuntimeException("Agent responded with HTTP $code.");
+            throw new RuntimeException($this->httpErrorMessage($code, $buffer, $contentType));
         }
+        if ($buffer !== '') {
+            $deliver($buffer); // last line without a trailing \n
+        }
+    }
+
+    /**
+     * Message for an HTTP-error response. The agent reports errors as a JSON
+     * {"error":...} first line; anything else means the response was produced
+     * by the hosting layer (error page, bot protection), not the agent.
+     */
+    private function httpErrorMessage(int $code, string $bodyHead, string $contentType): string
+    {
+        $firstLine = strtok($bodyHead, "\n");
+        $obj = $firstLine === false ? null : json_decode(trim($firstLine), true);
+        if (is_array($obj) && isset($obj['error'])) {
+            return "Agent responded with HTTP $code: " . (string) $obj['error'];
+        }
+        return sprintf(
+            'Agent responded with HTTP %d and a non-JSON body%s – the response is probably not from the '
+            . 'psync agent (a hosting error page or bot protection intercepted the request).',
+            $code,
+            $contentType !== '' ? " ($contentType)" : '',
+        );
     }
 
     /**
