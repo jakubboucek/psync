@@ -56,6 +56,12 @@ documentation is in [README.md](README.md); here are the things important for ed
   (forged `compare`/`download` content; uploads readable) — that asymmetry is why it's a warning, not
   a hard block. Curl connection-level options live in `HttpClient::connectionOptions()`, shared by
   both curl paths (`exec()` + `downloadToTemp()`) so a transport tweak can't apply to just one.
+  One **value** option follows the same pattern with CLI-wins semantics instead of OR: `resolve`
+  (= `--resolve <host:port:addr>`, curl's `CURLOPT_RESOLVE`) pins the agent host to a fixed address
+  while keeping full TLS verification against the hostname — the migration counterpart to `--insecure`
+  for "DNS not switched yet" (replaces editing `/etc/hosts`). Format-validated by regex in
+  `buildHttpClient()` (the addr part is permissive: IPv6 has colons); warned about in `capabilities()`
+  on every run like `insecure`, so a stale pin doesn't outlive the migration.
   Resolved in `AbstractSyncCommand::deleteEnabled()` /
   `dryRunEnabled()` / `buildHttpClient()`; `checksum` is OR-ed in `buildComparator()`. The `install`
   config template is intentionally left unchanged (new keys not emitted) so default installs keep the

@@ -111,6 +111,7 @@ test('the new behavior flags default to off (legacy behavior preserved)', functi
     Assert::false($config->testMode);
     Assert::false($config->http1);
     Assert::false($config->insecure);
+    Assert::null($config->resolve);
     @unlink($path);
 });
 
@@ -124,6 +125,7 @@ test('the new behavior flags are read from the config', function () {
         'testMode' => true,
         'http1' => true,
         'insecure' => true,
+        'resolve' => 'example.com:443:203.0.113.7',
     ]);
     $config = Config::load($path);
     Assert::true($config->checksum);
@@ -131,5 +133,6 @@ test('the new behavior flags are read from the config', function () {
     Assert::true($config->testMode);
     Assert::true($config->http1);
     Assert::true($config->insecure);
+    Assert::same('example.com:443:203.0.113.7', $config->resolve);
     @unlink($path);
 });

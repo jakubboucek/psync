@@ -35,6 +35,7 @@ final class HttpClient
         private readonly bool $forceHttp1 = false,
         private readonly string $userAgent = 'psync',
         private readonly bool $insecure = false,
+        private readonly ?string $resolve = null,
     ) {
     }
 
@@ -53,6 +54,13 @@ final class HttpClient
                 'TLS certificate verification is disabled (--insecure) — the server identity and responses '
                 . 'are not authenticated; use only temporarily (e.g. during a migration).',
             );
+        }
+        if ($this->resolve !== null) {
+            $this->reporter?->warn(sprintf(
+                'DNS override is active (--resolve %s) — the agent host connects to a manually pinned '
+                . 'address, not what DNS says; remove it once the real DNS points there.',
+                $this->resolve,
+            ));
         }
 
         $lines = $this->postJson(Protocol::ACTION_CAPABILITIES, []);
@@ -388,6 +396,9 @@ final class HttpClient
         if ($this->insecure) {
             $opts[CURLOPT_SSL_VERIFYPEER] = false;
             $opts[CURLOPT_SSL_VERIFYHOST] = 0;
+        }
+        if ($this->resolve !== null) {
+            $opts[CURLOPT_RESOLVE] = [$this->resolve];
         }
         return $opts;
     }
