@@ -57,6 +57,13 @@ abstract class AbstractSyncCommand extends Command
                 null,
                 InputOption::VALUE_NONE,
                 'Force HTTP/1.1 for agent requests (workaround for hostings whose HTTP/2 kills streamed responses).',
+            )
+            ->addOption(
+                'insecure',
+                null,
+                InputOption::VALUE_NONE,
+                'Disable TLS certificate verification, like `curl -k` (temporary workaround for a server '
+                . 'without a valid certificate yet, e.g. during a migration).',
             );
     }
 
@@ -73,8 +80,9 @@ abstract class AbstractSyncCommand extends Command
 
     protected function buildHttpClient(Config $config, InputInterface $input, ?Reporter $reporter = null): HttpClient
     {
-        // Like `checksum`: the CLI flag only adds, the config's `http1` makes it permanent.
+        // Like `checksum`: the CLI flag only adds, the config's `http1`/`insecure` makes it permanent.
         $forceHttp1 = $config->http1 || (bool) $input->getOption('http1');
+        $insecure = $config->insecure || (bool) $input->getOption('insecure');
 
         return new HttpClient(
             $config->url,
@@ -83,6 +91,7 @@ abstract class AbstractSyncCommand extends Command
             $reporter,
             $forceHttp1,
             'psync/' . ($this->getApplication()?->getVersion() ?? 'unknown'),
+            $insecure,
         );
     }
 

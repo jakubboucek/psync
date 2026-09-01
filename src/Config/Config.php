@@ -53,6 +53,7 @@ final readonly class Config
         array $compressSkipExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'zip', 'gz', 'pdf', 'mp4', 'mp3'],
         public bool $serverGzipWorkaround = false,
         public bool $http1 = false,
+        public bool $insecure = false,
         public ?string $configPath = null,
     ) {
         $this->ignore = array_values(array_map(strval(...), $ignore));
@@ -118,6 +119,7 @@ final readonly class Config
                 ?? ['jpg', 'jpeg', 'png', 'gif', 'webp', 'zip', 'gz', 'pdf', 'mp4', 'mp3']),
             serverGzipWorkaround: (bool) ($data['serverGzipWorkaround'] ?? false),
             http1: (bool) ($data['http1'] ?? false),
+            insecure: (bool) ($data['insecure'] ?? false),
             configPath: $configReal,
         );
     }
