@@ -132,6 +132,12 @@ documentation is in [README.md](README.md); here are the things important for ed
 - **Batching & limits**: the client reads `capabilities` and batches accordingly. Upload is limited
   by the real `post_max_size` (the request body) — **a file larger than post_max_size will not pass through bulk**
   and `Uploader` skips it with a message (chunked upload = a future TODO). Download is not limited by this.
+  On top of the server limit there is a **client-side batch cap** (`Uploader::BATCH_MEMORY_CAP`, 32 MB):
+  `flush()` assembles the whole batch body into a PHP string (and curl keeps another copy), so a server
+  reporting a huge `post_max_size` (e.g. 128M) would otherwise drive the batch straight into the client's
+  default 128M `memory_limit` — seen live on Webglobe (OOM in `flush()` while `compare`/`download`, which
+  stream, were fine). The cap applies **only to batching**; a single file may still use the full server
+  limit and travels as a solo batch (per-file refusal keeps using `post_max_size`).
 - **Resumability is the primary** correctness guarantee; the NDJSON stream is only for progress. After a server
   crash, the command is rerun (idempotent; finished files are skipped).
 
