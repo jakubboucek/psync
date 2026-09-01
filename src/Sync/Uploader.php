@@ -21,7 +21,20 @@ final readonly class Uploader
     /** Fallback when the server reports an unlimited post_max_size (0). */
     private const int DEFAULT_LIMIT = 64 * 1024 * 1024;
 
+    /**
+     * Client-side batch cap: flush() assembles the batch body into a string
+     * (and curl keeps another copy), so the batch must stay well below the
+     * client's memory_limit no matter how big a post_max_size the server
+     * reports. Caps only batching - a single file may still use the full
+     * server limit (it just travels as a solo batch).
+     */
+    private const int BATCH_MEMORY_CAP = 32 * 1024 * 1024;
+
+    /** Per-file maximum = the server's post_max_size (minus margin). */
     private int $limit;
+
+    /** Flush threshold: min(server limit, client memory cap). */
+    private int $batchLimit;
 
     /**
      * @param array<string, mixed> $caps
@@ -36,6 +49,7 @@ final readonly class Uploader
     ) {
         $post = (int) ($caps['postMaxSize'] ?? 0);
         $this->limit = $post > 0 ? max(self::MARGIN * 2, $post - self::MARGIN) : self::DEFAULT_LIMIT;
+        $this->batchLimit = min($this->limit, self::BATCH_MEMORY_CAP);
     }
 
     /**
@@ -68,7 +82,7 @@ final readonly class Uploader
                 ));
                 continue;
             }
-            if ($batch !== [] && $batchBytes + $frame['size'] > $this->limit) {
+            if ($batch !== [] && $batchBytes + $frame['size'] > $this->batchLimit) {
                 $this->flush($batch, $onResult);
                 $batch = [];
                 $batchBytes = 0;
@@ -88,7 +102,8 @@ final readonly class Uploader
         if ($batch === []) {
             return;
         }
-        // The batch body is ≤ post_max_size (small), assemble it into a string.
+        // The batch body is capped by batchLimit (except a solo oversized file),
+        // so assembling it into a string is safe for the client memory_limit.
         $body = '';
         foreach ($batch as $item) {
             $body .= file_get_contents($item['tmp']);
