@@ -22,12 +22,14 @@ final class HttpClient
 
     private int $timeOffset = 0;
 
+    /** @param non-empty-string $userAgent */
     public function __construct(
         private readonly string $url,
         private readonly Signer $signer,
         private readonly ?string $expectedScopeRelPath = null,
         private readonly ?Reporter $reporter = null,
         private readonly bool $forceHttp1 = false,
+        private readonly string $userAgent = 'psync',
     ) {
     }
 
@@ -216,6 +218,7 @@ final class HttpClient
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_FILE => $fh,
             CURLOPT_HTTP_VERSION => $this->httpVersion(),
+            CURLOPT_USERAGENT => $this->userAgent,
         ]);
         $ok = curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -294,6 +297,7 @@ final class HttpClient
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_RETURNTRANSFER => false,
             CURLOPT_HTTP_VERSION => $this->httpVersion(),
+            CURLOPT_USERAGENT => $this->userAgent,
             CURLOPT_WRITEFUNCTION => static function ($ch, string $data) use (&$buffer, $deliver): int {
                 $buffer .= $data;
                 while (($pos = strpos($buffer, "\n")) !== false) {

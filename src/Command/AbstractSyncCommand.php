@@ -82,6 +82,7 @@ abstract class AbstractSyncCommand extends Command
             $config->scopeRelPath(),
             $reporter,
             $forceHttp1,
+            'psync/' . ($this->getApplication()?->getVersion() ?? 'unknown'),
         );
     }
 

@@ -137,6 +137,12 @@ documentation is in [README.md](README.md); here are the things important for ed
 
 ## Watch out (why it is the way it is)
 
+- **User-Agent is mandatory in practice**: `HttpClient` sends `User-Agent: psync/<version>`
+  (`CURLOPT_USERAGENT`, wired from `AbstractSyncCommand::buildHttpClient()` via
+  `getApplication()->getVersion()`) on every request — PHP curl sends **no** UA by default, and hosting
+  WAFs treat a UA-less request as a bot (seen live: WEDOS Global Protection on wedos.com hostings
+  answers it with HTTP 401 + an HTML ALTCHA challenge page, for **every** request incl. GET). Do not
+  remove the header.
 - **Console output escaping**: any dynamic data interpolated into Symfony console markup (`<fg=…>…</>`)
   MUST go through `OutputFormatter::escape()` — remote file names and agent-returned error strings are
   server-controlled bytes, and an unescaped tag in them gets interpreted by the formatter (text swallowed
