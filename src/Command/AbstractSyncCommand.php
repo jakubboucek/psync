@@ -57,6 +57,21 @@ abstract class AbstractSyncCommand extends Command
                 null,
                 InputOption::VALUE_NONE,
                 'Force HTTP/1.1 for agent requests (workaround for hostings whose HTTP/2 kills streamed responses).',
+            )
+            ->addOption(
+                'insecure',
+                null,
+                InputOption::VALUE_NONE,
+                'Disable TLS certificate verification, like `curl -k` (temporary workaround for a server '
+                . 'without a valid certificate yet, e.g. during a migration).',
+            )
+            ->addOption(
+                'resolve',
+                null,
+                InputOption::VALUE_REQUIRED,
+                'Connect to a fixed address instead of resolving the agent host via DNS, format '
+                . '<host:port:addr> like `curl --resolve` (e.g. example.com:443:203.0.113.7 — for a '
+                . 'migration target whose DNS does not point there yet, without editing /etc/hosts).',
             );
     }
 
@@ -73,8 +88,19 @@ abstract class AbstractSyncCommand extends Command
 
     protected function buildHttpClient(Config $config, InputInterface $input, ?Reporter $reporter = null): HttpClient
     {
-        // Like `checksum`: the CLI flag only adds, the config's `http1` makes it permanent.
+        // Like `checksum`: the CLI flag only adds, the config's `http1`/`insecure` makes it permanent.
         $forceHttp1 = $config->http1 || (bool) $input->getOption('http1');
+        $insecure = $config->insecure || (bool) $input->getOption('insecure');
+
+        // A value option: the CLI wins over the config (there is nothing to OR).
+        $resolve = (string) ($input->getOption('resolve') ?? '');
+        $resolve = $resolve !== '' ? $resolve : $config->resolve;
+        if ($resolve !== null && preg_match('~^[^:\s/]+:\d+:\S+$~', $resolve) !== 1) {
+            throw new RuntimeException(
+                "Invalid --resolve value '$resolve': expected <host:port:addr> (like curl --resolve), "
+                . 'e.g. example.com:443:203.0.113.7',
+            );
+        }
 
         return new HttpClient(
             $config->url,
@@ -83,6 +109,8 @@ abstract class AbstractSyncCommand extends Command
             $reporter,
             $forceHttp1,
             'psync/' . ($this->getApplication()?->getVersion() ?? 'unknown'),
+            $insecure,
+            $resolve,
         );
     }
 

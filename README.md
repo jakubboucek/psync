@@ -93,6 +93,8 @@ return [
 - **`testMode`** – make every `upload`/`download` a **preview** by default (like `--dry-run`); perform the real transfer only with `--run`. Lets you keep a cautious workflow without an opposite flag in the config. A command-line flag always wins: `--dry-run` forces a preview, `--run` forces execution (passing both is an error).
 - **`compress`** / **`compressSkipExt`** – gzip the payload during transfer, except for the listed (already-compressed) extensions.
 - **`http1`** – force HTTP/1.1 for every agent request, as if `--http1` were always passed (the flag only adds). Use it when the hosting's HTTP/2 layer kills long streamed responses (`HTTP/2 stream … INTERNAL_ERROR`).
+- **`insecure`** – disable TLS certificate verification, as if `--insecure` were always passed (the flag only adds). See the `--insecure` notes under Commands; a warning is printed on every run while it is set, so it cannot stay forgotten in the config.
+- **`resolve`** – pin the agent host to a fixed address (`host:port:addr`, like `curl --resolve`) instead of DNS. See the `--resolve` notes under Commands; the CLI option overrides the config value, and a warning is printed on every run while it is set.
 
 > The filesystem `agentDir` (used to compute the scope) and the public `agentUrl` are **independent** — psync does not track how your DocumentRoot maps to the filesystem, so it only needs the URL that reaches the agent.
 
@@ -132,11 +134,11 @@ psync install    [--host <h> | --agent-url <u>] \
 
 psync re-install [--preserve-key] [--config .psync.php]       # regenerate the agent file
 
-psync compare    [path] [--checksum] [--http1]                # list differences (transfers nothing)
+psync compare    [path] [--checksum] [--http1] [--insecure] [--resolve h:p:a]   # list differences (transfers nothing)
 
-psync upload     [path] [--checksum] [--http1] [--delete] [--dry-run] [--run]   # local → remote
+psync upload     [path] [--checksum] [--http1] [--insecure] [--resolve h:p:a] [--delete] [--dry-run] [--run]   # local → remote
 
-psync download   [path] [--checksum] [--http1] [--delete] [--dry-run] [--run]   # remote → local
+psync download   [path] [--checksum] [--http1] [--insecure] [--resolve h:p:a] [--delete] [--dry-run] [--run]   # remote → local
 ```
 
 - The optional **`path`** limits the operation to a subdirectory/file.
@@ -145,6 +147,8 @@ psync download   [path] [--checksum] [--http1] [--delete] [--dry-run] [--run]   
 - **`--run`** forces a real transfer when the config sets `testMode` (the opposite of `--dry-run`; passing both is an error).
 - **`--checksum`** always computes the hash (ignoring mtime and the cache), like `rsync -c`.
 - **`--http1`** forces HTTP/1.1 for agent requests — a workaround for hostings whose HTTP/2 front server kills long streamed responses (the client then fails with `HTTP/2 stream … INTERNAL_ERROR`). Set `http1` in the config to make it permanent.
+- **`--insecure`** disables TLS certificate verification, like `curl -k` — for a server that does not have a valid certificate **yet** (typically during a migration). Requests stay protected even then (every request is Ed25519-signed, and the private key never travels), but **responses are not authenticated**: an active attacker could forge `compare` results or `download` content, and uploads travel readable. Use it temporarily and prefer `upload` over `download` while it is on; a warning is printed on every run. Set `insecure` in the config to avoid retyping it (the warning still shows).
+- **`--resolve <host:port:addr>`** connects to a fixed address instead of resolving the agent host via DNS, like `curl --resolve` (e.g. `--resolve example.com:443:203.0.113.7`) — for a migration target whose DNS does not point there yet, without touching `/etc/hosts`. Unlike `--insecure` this keeps **full TLS verification** (the certificate is checked against the host name), so when the new server already has a valid certificate, prefer `--resolve` alone. Set `resolve` in the config to avoid retyping it (the CLI option overrides it); a warning is printed on every run so a stale pin does not silently outlive the migration.
 
 `compare` legend: `>` local only · `<` server only · `M` differs · `=` identical.
 

@@ -34,6 +34,8 @@ final class HttpClient
         private readonly ?Reporter $reporter = null,
         private readonly bool $forceHttp1 = false,
         private readonly string $userAgent = 'psync',
+        private readonly bool $insecure = false,
+        private readonly ?string $resolve = null,
     ) {
     }
 
@@ -45,6 +47,22 @@ final class HttpClient
      */
     public function capabilities(): array
     {
+        // Warn before the first request, so the reduced security is visible even
+        // when the connection itself fails.
+        if ($this->insecure) {
+            $this->reporter?->warn(
+                'TLS certificate verification is disabled (--insecure) — the server identity and responses '
+                . 'are not authenticated; use only temporarily (e.g. during a migration).',
+            );
+        }
+        if ($this->resolve !== null) {
+            $this->reporter?->warn(sprintf(
+                'DNS override is active (--resolve %s) — the agent host connects to a manually pinned '
+                . 'address, not what DNS says; remove it once the real DNS points there.',
+                $this->resolve,
+            ));
+        }
+
         $lines = $this->postJson(Protocol::ACTION_CAPABILITIES, []);
         $caps = $lines[0] ?? null;
         if (!is_array($caps) || !isset($caps['serverTime'])) {
@@ -221,9 +239,7 @@ final class HttpClient
             CURLOPT_POSTFIELDS => $body,
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_FILE => $fh,
-            CURLOPT_HTTP_VERSION => $this->httpVersion(),
-            CURLOPT_USERAGENT => $this->userAgent,
-        ]);
+        ] + $this->connectionOptions());
         $ok = curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $contentType = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
@@ -295,8 +311,6 @@ final class HttpClient
             CURLOPT_POSTFIELDS => $body,
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_RETURNTRANSFER => false,
-            CURLOPT_HTTP_VERSION => $this->httpVersion(),
-            CURLOPT_USERAGENT => $this->userAgent,
             CURLOPT_WRITEFUNCTION => static function (CurlHandle $ch, string $data) use (&$buffer, $deliver): int {
                 // On an error status the body may not come from the agent at all (a hosting
                 // error page, a bot-protection challenge) – keep its head for the exception
@@ -314,7 +328,7 @@ final class HttpClient
                 }
                 return strlen($data);
             },
-        ]);
+        ] + $this->connectionOptions());
 
         $ok = curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -364,6 +378,29 @@ final class HttpClient
     private function httpVersion(): int
     {
         return $this->forceHttp1 ? CURL_HTTP_VERSION_1_1 : CURL_HTTP_VERSION_NONE;
+    }
+
+    /**
+     * Connection-level curl options shared by every request (streamed and
+     * download alike), so a transport tweak can never apply to just one of the
+     * two code paths.
+     *
+     * @return array<int, mixed>
+     */
+    private function connectionOptions(): array
+    {
+        $opts = [
+            CURLOPT_HTTP_VERSION => $this->httpVersion(),
+            CURLOPT_USERAGENT => $this->userAgent,
+        ];
+        if ($this->insecure) {
+            $opts[CURLOPT_SSL_VERIFYPEER] = false;
+            $opts[CURLOPT_SSL_VERIFYHOST] = 0;
+        }
+        if ($this->resolve !== null) {
+            $opts[CURLOPT_RESOLVE] = [$this->resolve];
+        }
+        return $opts;
     }
 
     /**
